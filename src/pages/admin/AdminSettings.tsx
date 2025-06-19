@@ -1,0 +1,399 @@
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { 
+  ArrowLeft, 
+  Save,
+  Settings,
+  Percent,
+  Globe,
+  Mail,
+  Phone,
+  Shield,
+  DollarSign,
+  AlertTriangle,
+  Image,
+  Type,
+  Upload,
+  Download,
+  Smartphone,
+  MapPin,
+  Building
+} from 'lucide-react';
+import { supabase } from '../../lib/supabase';
+import { useAuthStore } from '../../store/authStore';
+
+type AdminSetting = {
+  id: string;
+  key: string;
+  value: string;
+  description: string;
+};
+
+const AdminSettings: React.FC = () => {
+  const navigate = useNavigate();
+  const { user } = useAuthStore();
+  const [settings, setSettings] = useState<AdminSetting[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [formData, setFormData] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (!user?.isAdmin) {
+      navigate('/admin/login');
+      return;
+    }
+    fetchSettings();
+  }, [user, navigate]);
+
+  const fetchSettings = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('admin_settings')
+        .select('*')
+        .order('key');
+
+      if (error) throw error;
+
+      setSettings(data || []);
+      
+      // Initialize form data
+      const initialFormData: Record<string, string> = {};
+      data?.forEach(setting => {
+        initialFormData[setting.key] = setting.value;
+      });
+      setFormData(initialFormData);
+    } catch (error) {
+      console.error('Error fetching settings:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      // Update each setting
+      for (const [key, value] of Object.entries(formData)) {
+        await supabase
+          .from('admin_settings')
+          .update({ 
+            value, 
+            updated_by: user?.id,
+            updated_at: new Date().toISOString()
+          })
+          .eq('key', key);
+      }
+
+      // Log admin action
+      await supabase.from('admin_logs').insert([{
+        admin_id: user?.id,
+        action: 'update_settings',
+        details: { updated_settings: Object.keys(formData) },
+      }]);
+
+      alert('Settings updated successfully!');
+    } catch (error) {
+      console.error('Error updating settings:', error);
+      alert('Error updating settings. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleChange = (key: string, value: string) => {
+    setFormData(prev => ({ ...prev, [key]: value }));
+  };
+
+  const getSettingIcon = (key: string) => {
+    switch (key) {
+      case 'referral_bonus_percentage':
+        return <Percent className="text-green-500" size={20} />;
+      case 'site_name':
+        return <Globe className="text-blue-500" size={20} />;
+      case 'support_email':
+      case 'footer_email':
+        return <Mail className="text-purple-500" size={20} />;
+      case 'support_phone':
+      case 'footer_phone':
+        return <Phone className="text-orange-500" size={20} />;
+      case 'footer_address':
+        return <MapPin className="text-red-500" size={20} />;
+      case 'footer_company_name':
+        return <Building className="text-indigo-500" size={20} />;
+      case 'maintenance_mode':
+        return <Shield className="text-red-500" size={20} />;
+      case 'max_wallet_balance':
+      case 'min_transaction_amount':
+      case 'max_transaction_amount':
+        return <DollarSign className="text-green-500" size={20} />;
+      case 'hero_banner_image':
+      case 'hero_banner_image_alt':
+      case 'steps_banner_image':
+        return <Image className="text-blue-500" size={20} />;
+      case 'hero_title':
+      case 'hero_subtitle':
+      case 'steps_title':
+        return <Type className="text-purple-500" size={20} />;
+      case 'download_app_url':
+        return <Download className="text-indigo-500" size={20} />;
+      case 'download_app_enabled':
+        return <Smartphone className="text-indigo-500" size={20} />;
+      default:
+        return <Settings className="text-gray-500" size={20} />;
+    }
+  };
+
+  const settingCategories = {
+    'General': ['site_name', 'support_email', 'support_phone'],
+    'Footer Information': ['footer_company_name', 'footer_email', 'footer_phone', 'footer_address'],
+    'Homepage Banners': ['hero_banner_image', 'hero_banner_image_alt', 'steps_banner_image'],
+    'Homepage Content': ['hero_title', 'hero_subtitle', 'steps_title'],
+    'Download App': ['download_app_enabled', 'download_app_url'],
+    'Referral System': ['referral_bonus_percentage'],
+    'Transaction Limits': ['min_transaction_amount', 'max_transaction_amount', 'max_wallet_balance'],
+    'System': ['maintenance_mode'],
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#0F9D58]"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      {/* Header */}
+      <div className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center py-4">
+            <div className="flex items-center">
+              <button
+                onClick={() => navigate('/admin/dashboard')}
+                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors mr-4"
+              >
+                <ArrowLeft size={24} className="text-gray-700 dark:text-gray-300" />
+              </button>
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Admin Settings</h1>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Configure application settings, homepage content, and footer information</p>
+              </div>
+            </div>
+            
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="flex items-center px-4 py-2 bg-[#0F9D58] text-white rounded-lg hover:bg-[#0d8a4f] transition-colors disabled:opacity-50"
+            >
+              <Save size={16} className="mr-2" />
+              {saving ? 'Saving...' : 'Save Changes'}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Warning Banner */}
+        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl p-4 mb-8">
+          <div className="flex items-start">
+            <AlertTriangle className="text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" size={20} />
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+                Important Notice
+              </h3>
+              <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
+                Changes to these settings will affect the entire application, homepage appearance, and footer information. Please review carefully before saving.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Settings Categories */}
+        <div className="space-y-8">
+          {Object.entries(settingCategories).map(([category, settingKeys]) => (
+            <div key={category} className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+              <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{category}</h2>
+                {category === 'Footer Information' && (
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                    Manage contact information and company details displayed in the website footer
+                  </p>
+                )}
+                {category === 'Homepage Banners' && (
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                    Manage banner images displayed on the homepage hero and steps sections
+                  </p>
+                )}
+                {category === 'Homepage Content' && (
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                    Customize text content displayed on the homepage
+                  </p>
+                )}
+                {category === 'Download App' && (
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                    Configure the download app button on the homepage
+                  </p>
+                )}
+              </div>
+              
+              <div className="p-6 space-y-6">
+                {settingKeys.map(key => {
+                  const setting = settings.find(s => s.key === key);
+                  if (!setting) return null;
+
+                  return (
+                    <div key={key} className="flex items-start space-x-4">
+                      <div className="flex-shrink-0 mt-1">
+                        {getSettingIcon(key)}
+                      </div>
+                      
+                      <div className="flex-1">
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          {setting.key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                        </label>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
+                          {setting.description}
+                        </p>
+                        
+                        {setting.key === 'maintenance_mode' || setting.key === 'download_app_enabled' ? (
+                          <select
+                            value={formData[key] || setting.value}
+                            onChange={(e) => handleChange(key, e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0F9D58]"
+                          >
+                            <option value="false">Disabled</option>
+                            <option value="true">Enabled</option>
+                          </select>
+                        ) : setting.key.includes('image') ? (
+                          <div className="space-y-3">
+                            <input
+                              type="url"
+                              value={formData[key] || setting.value}
+                              onChange={(e) => handleChange(key, e.target.value)}
+                              placeholder="Enter image URL (e.g., https://images.pexels.com/...)"
+                              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0F9D58]"
+                            />
+                            {(formData[key] || setting.value) && (
+                              <div className="relative">
+                                <img
+                                  src={formData[key] || setting.value}
+                                  alt="Banner preview"
+                                  className="w-full h-32 object-cover rounded-lg border border-gray-200 dark:border-gray-600"
+                                  onError={(e) => {
+                                    const target = e.target as HTMLImageElement;
+                                    target.style.display = 'none';
+                                  }}
+                                />
+                                <div className="absolute top-2 right-2 bg-black bg-opacity-50 text-white text-xs px-2 py-1 rounded">
+                                  Preview
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ) : setting.key.includes('title') || setting.key.includes('subtitle') || setting.key.includes('address') ? (
+                          <textarea
+                            value={formData[key] || setting.value}
+                            onChange={(e) => handleChange(key, e.target.value)}
+                            rows={setting.key.includes('subtitle') || setting.key.includes('address') ? 3 : 2}
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0F9D58]"
+                          />
+                        ) : setting.key.includes('url') ? (
+                          <input
+                            type="url"
+                            value={formData[key] || setting.value}
+                            onChange={(e) => handleChange(key, e.target.value)}
+                            placeholder="Enter URL (e.g., https://play.google.com/store/apps)"
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0F9D58]"
+                          />
+                        ) : setting.key.includes('percentage') || setting.key.includes('amount') || setting.key.includes('balance') ? (
+                          <input
+                            type="number"
+                            value={formData[key] || setting.value}
+                            onChange={(e) => handleChange(key, e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0F9D58]"
+                            min="0"
+                            step={setting.key.includes('percentage') ? '0.1' : '1'}
+                          />
+                        ) : setting.key.includes('email') ? (
+                          <input
+                            type="email"
+                            value={formData[key] || setting.value}
+                            onChange={(e) => handleChange(key, e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0F9D58]"
+                          />
+                        ) : setting.key.includes('phone') ? (
+                          <input
+                            type="tel"
+                            value={formData[key] || setting.value}
+                            onChange={(e) => handleChange(key, e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0F9D58]"
+                          />
+                        ) : (
+                          <input
+                            type="text"
+                            value={formData[key] || setting.value}
+                            onChange={(e) => handleChange(key, e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0F9D58]"
+                          />
+                        )}
+                        
+                        {setting.key === 'referral_bonus_percentage' && (
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            Current value: {formData[key] || setting.value}% bonus on first referral deposit
+                          </p>
+                        )}
+                        
+                        {setting.key.includes('amount') && (
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            Amount in Naira (₦)
+                          </p>
+                        )}
+
+                        {setting.key.includes('image') && (
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            Recommended: High-quality images (1200x600px or larger) from Pexels, Unsplash, or similar
+                          </p>
+                        )}
+
+                        {setting.key === 'download_app_url' && (
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            Link to your app on Play Store, App Store, or direct download
+                          </p>
+                        )}
+
+                        {setting.key.includes('footer_') && (
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            This information will be displayed in the website footer
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Additional Settings Info */}
+        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-6 mt-8">
+          <h3 className="text-lg font-semibold text-blue-900 dark:text-blue-100 mb-4">
+            Settings Information
+          </h3>
+          <div className="space-y-3 text-sm text-blue-800 dark:text-blue-200">
+            <p>• <strong>Footer Information:</strong> Contact details and company information displayed at the bottom of every page</p>
+            <p>• <strong>Homepage Banners:</strong> Control the main hero image and steps section image displayed on the homepage</p>
+            <p>• <strong>Homepage Content:</strong> Customize the main title, subtitle, and steps section title text</p>
+            <p>• <strong>Download App:</strong> Enable/disable and configure the download app button on the homepage</p>
+            <p>• <strong>Referral Bonus Percentage:</strong> The percentage bonus users receive when their referrals make their first deposit</p>
+            <p>• <strong>Transaction Limits:</strong> Set minimum and maximum amounts for transactions to prevent abuse</p>
+            <p>• <strong>Maintenance Mode:</strong> When enabled, the site will show a maintenance message to users</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default AdminSettings;
