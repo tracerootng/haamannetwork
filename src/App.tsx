@@ -29,6 +29,7 @@ import UsersManagement from './pages/admin/UsersManagement';
 import TransactionsManagement from './pages/admin/TransactionsManagement';
 import AdminSettings from './pages/admin/AdminSettings';
 import OrdersManagement from './pages/admin/OrdersManagement';
+import WalletManagement from './pages/admin/WalletManagement';
 
 import { useAuthStore } from './store/authStore';
 
@@ -49,6 +50,7 @@ function App() {
         <Route path="/admin/users" element={<UsersManagement />} />
         <Route path="/admin/transactions" element={<TransactionsManagement />} />
         <Route path="/admin/orders" element={<OrdersManagement />} />
+        <Route path="/admin/wallet" element={<WalletManagement />} />
         <Route path="/admin/settings" element={<AdminSettings />} />
 
         {/* Coming Soon Route */}
