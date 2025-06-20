@@ -102,19 +102,36 @@ class ServiceAPI {
         console.error('Database error updating failed transaction:', updateError);
       }
 
-      // Provide user-friendly error messages
+      // Provide user-friendly error messages based on the specific error
+      if (error.message.includes('API token not configured') || 
+          error.message.includes('YOUR_MASKAWA_TOKEN_HERE')) {
+        throw new Error('Payment service not configured. Please contact support to set up the payment system.');
+      }
+      
+      if (error.message.includes('API configuration not found') ||
+          error.message.includes('API configuration is incomplete')) {
+        throw new Error('Payment service configuration missing. Please contact support.');
+      }
+      
       if (error.message.includes('Unable to connect') || 
+          error.message.includes('Network connection error') ||
           error.message.includes('timeout') || 
           error.message.includes('Failed to fetch')) {
         throw new Error('Unable to connect to payment service. Please check your internet connection and try again.');
       }
       
-      if (error.message.includes('API configuration') || 
-          error.message.includes('contact support')) {
-        throw new Error('Service temporarily unavailable. Please contact support or try again later.');
+      if (error.message.includes('API authentication failed') ||
+          error.message.includes('API access denied')) {
+        throw new Error('Payment service authentication error. Please contact support.');
+      }
+      
+      if (error.message.includes('API server error') ||
+          error.message.includes('Service configuration error')) {
+        throw new Error('Payment service temporarily unavailable. Please try again later or contact support.');
       }
 
-      throw new Error(error.message || 'Transaction failed. Please try again.');
+      // For any other errors, use the original message or a generic fallback
+      throw new Error(error.message || 'Transaction failed. Please try again or contact support if the issue persists.');
     }
   }
 
@@ -205,19 +222,36 @@ class ServiceAPI {
         console.error('Database error updating failed transaction:', updateError);
       }
 
-      // Provide user-friendly error messages
+      // Provide user-friendly error messages based on the specific error
+      if (error.message.includes('API token not configured') || 
+          error.message.includes('YOUR_MASKAWA_TOKEN_HERE')) {
+        throw new Error('Payment service not configured. Please contact support to set up the payment system.');
+      }
+      
+      if (error.message.includes('API configuration not found') ||
+          error.message.includes('API configuration is incomplete')) {
+        throw new Error('Payment service configuration missing. Please contact support.');
+      }
+      
       if (error.message.includes('Unable to connect') || 
+          error.message.includes('Network connection error') ||
           error.message.includes('timeout') || 
           error.message.includes('Failed to fetch')) {
         throw new Error('Unable to connect to payment service. Please check your internet connection and try again.');
       }
       
-      if (error.message.includes('API configuration') || 
-          error.message.includes('contact support')) {
-        throw new Error('Service temporarily unavailable. Please contact support or try again later.');
+      if (error.message.includes('API authentication failed') ||
+          error.message.includes('API access denied')) {
+        throw new Error('Payment service authentication error. Please contact support.');
+      }
+      
+      if (error.message.includes('API server error') ||
+          error.message.includes('Service configuration error')) {
+        throw new Error('Payment service temporarily unavailable. Please try again later or contact support.');
       }
 
-      throw new Error(error.message || 'Transaction failed. Please try again.');
+      // For any other errors, use the original message or a generic fallback
+      throw new Error(error.message || 'Transaction failed. Please try again or contact support if the issue persists.');
     }
   }
 
@@ -309,19 +343,36 @@ class ServiceAPI {
         console.error('Database error updating failed transaction:', updateError);
       }
 
-      // Provide user-friendly error messages
+      // Provide user-friendly error messages based on the specific error
+      if (error.message.includes('API token not configured') || 
+          error.message.includes('YOUR_MASKAWA_TOKEN_HERE')) {
+        throw new Error('Payment service not configured. Please contact support to set up the payment system.');
+      }
+      
+      if (error.message.includes('API configuration not found') ||
+          error.message.includes('API configuration is incomplete')) {
+        throw new Error('Payment service configuration missing. Please contact support.');
+      }
+      
       if (error.message.includes('Unable to connect') || 
+          error.message.includes('Network connection error') ||
           error.message.includes('timeout') || 
           error.message.includes('Failed to fetch')) {
         throw new Error('Unable to connect to payment service. Please check your internet connection and try again.');
       }
       
-      if (error.message.includes('API configuration') || 
-          error.message.includes('contact support')) {
-        throw new Error('Service temporarily unavailable. Please contact support or try again later.');
+      if (error.message.includes('API authentication failed') ||
+          error.message.includes('API access denied')) {
+        throw new Error('Payment service authentication error. Please contact support.');
+      }
+      
+      if (error.message.includes('API server error') ||
+          error.message.includes('Service configuration error')) {
+        throw new Error('Payment service temporarily unavailable. Please try again later or contact support.');
       }
 
-      throw new Error(error.message || 'Transaction failed. Please try again.');
+      // For any other errors, use the original message or a generic fallback
+      throw new Error(error.message || 'Transaction failed. Please try again or contact support if the issue persists.');
     }
   }
 }

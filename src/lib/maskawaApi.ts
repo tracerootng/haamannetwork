@@ -39,6 +39,7 @@ export const DISCO_MAPPINGS = {
 class MaskawaAPI {
   private baseUrl: string = '';
   private token: string = '';
+  private initialized: boolean = false;
 
   async initialize() {
     try {
@@ -49,7 +50,11 @@ class MaskawaAPI {
 
       if (error) {
         console.error('Database error fetching API settings:', error);
-        throw new Error('Failed to fetch API configuration from database');
+        throw new Error('Failed to fetch API configuration from database. Please contact support.');
+      }
+
+      if (!settings || settings.length === 0) {
+        throw new Error('API configuration not found. Please contact support to configure the MASKAWA API settings.');
       }
 
       const tokenSetting = settings?.find(s => s.key_name === 'maskawa_token');
@@ -57,6 +62,11 @@ class MaskawaAPI {
 
       if (!tokenSetting?.key_value || !baseUrlSetting?.key_value) {
         throw new Error('MASKAWA API configuration is incomplete. Please contact support to configure the API settings.');
+      }
+
+      // Check if token is still the default placeholder
+      if (tokenSetting.key_value === 'YOUR_MASKAWA_TOKEN_HERE') {
+        throw new Error('MASKAWA API token not configured. Please contact support to set up the API token.');
       }
 
       this.token = tokenSetting.key_value;
@@ -69,14 +79,19 @@ class MaskawaAPI {
         throw new Error('Invalid API base URL configuration. Please contact support.');
       }
 
+      // Ensure URL doesn't end with slash
+      this.baseUrl = this.baseUrl.replace(/\/$/, '');
+      this.initialized = true;
+
     } catch (error) {
       console.error('Failed to initialize MASKAWA API:', error);
+      this.initialized = false;
       throw error;
     }
   }
 
   private async makeRequest(endpoint: string, options: RequestInit = {}) {
-    if (!this.token || !this.baseUrl) {
+    if (!this.initialized) {
       await this.initialize();
     }
 
@@ -84,6 +99,7 @@ class MaskawaAPI {
     const headers = {
       'Authorization': `Token ${this.token}`,
       'Content-Type': 'application/json',
+      'Accept': 'application/json',
       ...options.headers,
     };
 
@@ -91,6 +107,8 @@ class MaskawaAPI {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
 
+      console.log(`Making API request to: ${url}`);
+      
       const response = await fetch(url, {
         ...options,
         headers,
@@ -112,11 +130,13 @@ class MaskawaAPI {
         }
 
         if (response.status === 401) {
-          throw new Error('API authentication failed. Please contact support.');
+          throw new Error('API authentication failed. Please contact support to verify the API token.');
         } else if (response.status === 403) {
-          throw new Error('API access denied. Please contact support.');
+          throw new Error('API access denied. Please contact support to verify your account permissions.');
+        } else if (response.status === 404) {
+          throw new Error('API endpoint not found. Please contact support.');
         } else if (response.status >= 500) {
-          throw new Error('API server error. Please try again later.');
+          throw new Error('API server error. Please try again later or contact support if the issue persists.');
         } else {
           throw new Error(errorMessage);
         }
@@ -136,7 +156,19 @@ class MaskawaAPI {
       }
       
       if (error.message === 'Failed to fetch') {
-        throw new Error('Unable to connect to payment service. Please check your internet connection and try again.');
+        throw new Error('Unable to connect to payment service. Please check your internet connection or contact support if the issue persists.');
+      }
+
+      // Check for network-related errors
+      if (error.message.includes('NetworkError') || 
+          error.message.includes('ERR_NETWORK') ||
+          error.message.includes('ERR_INTERNET_DISCONNECTED')) {
+        throw new Error('Network connection error. Please check your internet connection and try again.');
+      }
+
+      // Check for CORS errors
+      if (error.message.includes('CORS') || error.message.includes('Cross-Origin')) {
+        throw new Error('Service configuration error. Please contact support.');
       }
 
       // Re-throw our custom errors
