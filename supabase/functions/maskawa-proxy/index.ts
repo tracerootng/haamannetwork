@@ -15,34 +15,6 @@ const NETWORK_MAPPINGS = {
   '9mobile': 4,
 } as const;
 
-// Data plan mappings
-const DATA_PLAN_MAPPINGS = {
-  'mtn-500mb-30days': 101,
-  'mtn-1gb-30days': 102,
-  'mtn-2gb-30days': 103,
-  'mtn-5gb-30days': 104,
-  'airtel-500mb-30days': 201,
-  'airtel-1gb-30days': 202,
-  'airtel-2gb-30days': 203,
-  'airtel-5gb-30days': 204,
-  'glo-500mb-30days': 301,
-  'glo-1gb-30days': 302,
-  'glo-2gb-30days': 303,
-  'glo-5gb-30days': 304,
-  '9mobile-500mb-30days': 401,
-  '9mobile-1gb-30days': 402,
-  '9mobile-2gb-30days': 403,
-  '9mobile-5gb-30days': 404,
-} as const;
-
-// Disco mappings for electricity
-const DISCO_MAPPINGS = {
-  'ikeja': 'ikeja-electric',
-  'eko': 'eko-electric',
-  'ibadan': 'ibadan-electric',
-  'abuja': 'abuja-electric',
-} as const;
-
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -100,7 +72,7 @@ serve(async (req) => {
         apiPayload = {
           network: NETWORK_MAPPINGS[data.network as keyof typeof NETWORK_MAPPINGS],
           mobile_number: data.phoneNumber,
-          plan: DATA_PLAN_MAPPINGS[data.plan as keyof typeof DATA_PLAN_MAPPINGS],
+          plan: data.plan,
           Ported_number: true,
           payment_medium: 'MAIN WALLET',
         }
@@ -109,7 +81,7 @@ serve(async (req) => {
       case 'buy_electricity':
         apiEndpoint = '/api/billpayment/'
         apiPayload = {
-          disco_name: DISCO_MAPPINGS[data.disco as keyof typeof DISCO_MAPPINGS],
+          disco_name: data.disco,
           amount: data.amount,
           meter_number: data.meterNumber,
           MeterType: data.meterType === 'prepaid' ? 1 : 2,
