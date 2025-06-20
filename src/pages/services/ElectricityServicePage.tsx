@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Zap, ArrowLeft, CheckCircle, XCircle } from 'lucide-react';
+import { Zap, ArrowLeft, CheckCircle, XCircle, Download } from 'lucide-react';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import { useAuthStore } from '../../store/authStore';
 import { serviceAPI } from '../../lib/serviceApi';
 import { formatCurrency } from '../../lib/utils';
+import { jsPDF } from 'jspdf';
 
 const discos = [
   { value: 'ikeja', label: 'Ikeja Electric' },
@@ -93,8 +94,62 @@ const ElectricityServicePage: React.FC = () => {
     }
   };
 
+  const downloadReceipt = () => {
+    if (!transaction) return;
+    
+    const doc = new jsPDF();
+    
+    // Add logo (using text as placeholder)
+    doc.setFontSize(24);
+    doc.setTextColor(15, 157, 88); // Primary color #0F9D58
+    doc.text('HAAMAN NETWORK', 105, 20, { align: 'center' });
+    
+    doc.setFontSize(12);
+    doc.setTextColor(100);
+    doc.text('Digital Services & E-commerce Platform', 105, 30, { align: 'center' });
+    
+    // Add line separator
+    doc.setDrawColor(200);
+    doc.line(20, 35, 190, 35);
+    
+    // Transaction details
+    doc.setFontSize(14);
+    doc.setTextColor(0);
+    doc.text('ELECTRICITY BILL PAYMENT RECEIPT', 105, 45, { align: 'center' });
+    
+    doc.setFontSize(10);
+    const startY = 60;
+    const lineHeight = 7;
+    
+    // Details grid
+    const details = [
+      ['Date:', new Date().toLocaleString()],
+      ['Reference:', transaction.reference],
+      ['Disco:', discos.find(d => d.value === formData.disco)?.label || formData.disco],
+      ['Meter Number:', formData.meterNumber],
+      ['Meter Type:', formData.meterType === 'prepaid' ? 'Prepaid' : 'Postpaid'],
+      ['Amount:', formatCurrency(Number(formData.amount))],
+      ['Status:', 'SUCCESSFUL'],
+    ];
+    
+    details.forEach(([label, value], index) => {
+      doc.setFont('helvetica', 'bold');
+      doc.text(label, 40, startY + (lineHeight * index));
+      doc.setFont('helvetica', 'normal');
+      doc.text(String(value), 80, startY + (lineHeight * index));
+    });
+    
+    // Footer
+    doc.setFontSize(10);
+    doc.setTextColor(100);
+    doc.text('Thank you for choosing Haaman Network!', 105, 120, { align: 'center' });
+    
+    // Save the PDF
+    doc.save(`electricity-receipt-${transaction.reference}.pdf`);
+  };
+
   const renderStepOne = () => (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-20">
       {/* Header */}
       <div className="bg-white dark:bg-gray-800 px-4 py-4 flex items-center border-b border-gray-200 dark:border-gray-700">
         <button
@@ -192,7 +247,7 @@ const ElectricityServicePage: React.FC = () => {
       </div>
 
       {/* Continue Button */}
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
+      <div className="fixed bottom-0 left-0 right-0 p-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 z-10">
         <Button
           onClick={handleContinue}
           disabled={!formData.disco || !formData.meterType || !formData.meterNumber || !formData.amount || Number(formData.amount) < 1000}
@@ -305,7 +360,7 @@ const ElectricityServicePage: React.FC = () => {
               </div>
             </div>
             
-            <div className="flex space-x-3">
+            <div className="flex space-x-3 mb-4">
               <Button
                 variant="outline"
                 onClick={() => navigate('/')}
@@ -332,6 +387,15 @@ const ElectricityServicePage: React.FC = () => {
                 Pay Another Bill
               </Button>
             </div>
+            
+            <Button
+              variant="outline"
+              onClick={downloadReceipt}
+              className="w-full flex items-center justify-center"
+              icon={<Download size={16} />}
+            >
+              Download Receipt
+            </Button>
           </>
         ) : (
           <>

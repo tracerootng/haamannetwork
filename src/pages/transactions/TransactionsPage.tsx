@@ -66,7 +66,7 @@ const downloadReceipt = (transaction: any) => {
   
   // Add logo (using text as placeholder)
   doc.setFontSize(24);
-  doc.setTextColor(15, 47, 105); // Primary color
+  doc.setTextColor(15, 157, 88); // Primary color #0F9D58
   doc.text('HAAMAN NETWORK', 105, 20, { align: 'center' });
   
   doc.setFontSize(12);
@@ -183,7 +183,7 @@ const TransactionsPage: React.FC = () => {
   }
 
   return (
-    <div className="py-4 sm:py-6 animate-fade-in max-w-4xl mx-auto px-4">
+    <div className="py-4 sm:py-6 animate-fade-in max-w-4xl mx-auto px-4 pb-20">
       <h1 className="text-xl sm:text-2xl font-semibold mb-4 sm:mb-6">Transaction History</h1>
       
       <Card className="mb-4 sm:mb-6 p-4">

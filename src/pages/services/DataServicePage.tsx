@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, User, Search, Filter, Star, Zap } from 'lucide-react';
+import { ArrowLeft, User, Search, Filter, Star, Zap, Download } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import Card from '../../components/ui/Card';
@@ -8,6 +8,7 @@ import Badge from '../../components/ui/Badge';
 import { useAuthStore } from '../../store/authStore';
 import { serviceAPI } from '../../lib/serviceApi';
 import { formatCurrency } from '../../lib/utils';
+import { jsPDF } from 'jspdf';
 
 const networkProviders = [
   { 
@@ -191,6 +192,61 @@ const DataServicePage: React.FC = () => {
     }
   };
 
+  const downloadReceipt = () => {
+    if (!transaction || !selectedPlan) return;
+    
+    const doc = new jsPDF();
+    
+    // Add logo (using text as placeholder)
+    doc.setFontSize(24);
+    doc.setTextColor(15, 157, 88); // Primary color #0F9D58
+    doc.text('HAAMAN NETWORK', 105, 20, { align: 'center' });
+    
+    doc.setFontSize(12);
+    doc.setTextColor(100);
+    doc.text('Digital Services & E-commerce Platform', 105, 30, { align: 'center' });
+    
+    // Add line separator
+    doc.setDrawColor(200);
+    doc.line(20, 35, 190, 35);
+    
+    // Transaction details
+    doc.setFontSize(14);
+    doc.setTextColor(0);
+    doc.text('DATA BUNDLE PURCHASE RECEIPT', 105, 45, { align: 'center' });
+    
+    doc.setFontSize(10);
+    const startY = 60;
+    const lineHeight = 7;
+    
+    // Details grid
+    const details = [
+      ['Date:', new Date().toLocaleString()],
+      ['Reference:', transaction.reference],
+      ['Network:', networkProviders.find(n => n.value === selectedNetwork)?.label || selectedNetwork],
+      ['Data Plan:', selectedPlan.description],
+      ['Size:', `${selectedPlan.size} (${selectedPlan.validity})`],
+      ['Phone Number:', phoneNumber],
+      ['Amount:', formatCurrency(selectedPlan.selling_price)],
+      ['Status:', 'SUCCESSFUL'],
+    ];
+    
+    details.forEach(([label, value], index) => {
+      doc.setFont('helvetica', 'bold');
+      doc.text(label, 40, startY + (lineHeight * index));
+      doc.setFont('helvetica', 'normal');
+      doc.text(String(value), 80, startY + (lineHeight * index));
+    });
+    
+    // Footer
+    doc.setFontSize(10);
+    doc.setTextColor(100);
+    doc.text('Thank you for choosing Haaman Network!', 105, 120, { align: 'center' });
+    
+    // Save the PDF
+    doc.save(`data-receipt-${transaction.reference}.pdf`);
+  };
+
   const renderComingSoon = () => (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Header */}
@@ -246,7 +302,7 @@ const DataServicePage: React.FC = () => {
   );
 
   const renderStepOne = () => (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-20">
       {/* Header */}
       <div className="bg-white dark:bg-gray-800 px-4 py-4 flex items-center border-b border-gray-200 dark:border-gray-700">
         <button
@@ -512,7 +568,7 @@ const DataServicePage: React.FC = () => {
       </div>
 
       {/* Continue Button */}
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
+      <div className="fixed bottom-0 left-0 right-0 p-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 z-10">
         <Button
           onClick={handleContinue}
           disabled={!selectedNetwork || !selectedPlan || !phoneNumber}
@@ -645,7 +701,7 @@ const DataServicePage: React.FC = () => {
               </div>
             </div>
             
-            <div className="flex space-x-3">
+            <div className="flex space-x-3 mb-4">
               <Button
                 variant="outline"
                 onClick={() => navigate('/')}
@@ -669,6 +725,15 @@ const DataServicePage: React.FC = () => {
                 Buy Again
               </Button>
             </div>
+            
+            <Button
+              variant="outline"
+              onClick={downloadReceipt}
+              className="w-full flex items-center justify-center"
+              icon={<Download size={16} />}
+            >
+              Download Receipt
+            </Button>
           </>
         ) : (
           <>

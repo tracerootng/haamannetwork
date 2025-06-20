@@ -12,7 +12,8 @@ import {
   LogOut,
   Eye,
   Plus,
-  Wallet
+  Wallet,
+  Wifi
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { supabase } from '../../lib/supabase';
@@ -138,6 +139,13 @@ const AdminDashboard: React.FC = () => {
       color: 'bg-emerald-500',
     },
     {
+      title: 'Data Plans',
+      description: 'Manage data plans & pricing',
+      icon: Wifi,
+      path: '/admin/data-plans',
+      color: 'bg-amber-500',
+    },
+    {
       title: 'Settings',
       description: 'Configure app settings',
       icon: Settings,
@@ -242,7 +250,7 @@ const AdminDashboard: React.FC = () => {
         </div>
 
         {/* Quick Actions */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-8">
           {menuItems.map((item, index) => (
             <button
               key={index}
