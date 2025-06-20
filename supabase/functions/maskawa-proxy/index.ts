@@ -15,6 +15,49 @@ const NETWORK_MAPPINGS = {
   '9mobile': 4,
 } as const;
 
+// Data plan mappings for MASKAWA API
+const DATA_PLAN_MAPPINGS = {
+  // MTN Plans
+  'mtn-500mb-30days': 1,
+  'mtn-1gb-30days': 2,
+  'mtn-2gb-30days': 3,
+  'mtn-3gb-30days': 4,
+  'mtn-5gb-30days': 5,
+  'mtn-10gb-30days': 6,
+  'mtn-15gb-30days': 7,
+  'mtn-20gb-30days': 8,
+  
+  // Airtel Plans
+  'airtel-500mb-30days': 9,
+  'airtel-1gb-30days': 10,
+  'airtel-2gb-30days': 11,
+  'airtel-3gb-30days': 12,
+  'airtel-5gb-30days': 13,
+  'airtel-10gb-30days': 14,
+  'airtel-15gb-30days': 15,
+  'airtel-20gb-30days': 16,
+  
+  // Glo Plans
+  'glo-500mb-30days': 17,
+  'glo-1gb-30days': 18,
+  'glo-2gb-30days': 19,
+  'glo-3gb-30days': 20,
+  'glo-5gb-30days': 21,
+  'glo-10gb-30days': 22,
+  'glo-15gb-30days': 23,
+  'glo-20gb-30days': 24,
+  
+  // 9mobile Plans
+  '9mobile-500mb-30days': 25,
+  '9mobile-1gb-30days': 26,
+  '9mobile-2gb-30days': 27,
+  '9mobile-3gb-30days': 28,
+  '9mobile-5gb-30days': 29,
+  '9mobile-10gb-30days': 30,
+  '9mobile-15gb-30days': 31,
+  '9mobile-20gb-30days': 32,
+} as const;
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -68,11 +111,16 @@ serve(async (req) => {
         break
 
       case 'buy_data':
+        const planId = DATA_PLAN_MAPPINGS[data.plan as keyof typeof DATA_PLAN_MAPPINGS]
+        if (!planId) {
+          throw new Error(`Invalid data plan: ${data.plan}`)
+        }
+        
         apiEndpoint = '/api/data/'
         apiPayload = {
           network: NETWORK_MAPPINGS[data.network as keyof typeof NETWORK_MAPPINGS],
           mobile_number: data.phoneNumber,
-          plan: data.plan,
+          plan: planId,
           Ported_number: true,
           payment_medium: 'MAIN WALLET',
         }
