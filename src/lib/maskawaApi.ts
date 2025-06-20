@@ -37,147 +37,65 @@ export const DISCO_MAPPINGS = {
 } as const;
 
 class MaskawaAPI {
-  private baseUrl: string = '';
-  private token: string = '';
-  private initialized: boolean = false;
-
-  async initialize() {
-    try {
-      const { data: settings, error } = await supabase
-        .from('api_settings')
-        .select('key_name, key_value')
-        .in('key_name', ['maskawa_token', 'maskawa_base_url']);
-
-      if (error) {
-        console.error('Database error fetching API settings:', error);
-        throw new Error('Failed to fetch API configuration from database. Please contact support.');
-      }
-
-      if (!settings || settings.length === 0) {
-        throw new Error('API configuration not found. Please contact support to configure the MASKAWA API settings.');
-      }
-
-      const tokenSetting = settings?.find(s => s.key_name === 'maskawa_token');
-      const baseUrlSetting = settings?.find(s => s.key_name === 'maskawa_base_url');
-
-      if (!tokenSetting?.key_value || !baseUrlSetting?.key_value) {
-        throw new Error('MASKAWA API configuration is incomplete. Please contact support to configure the API settings.');
-      }
-
-      // Check if token is still the default placeholder
-      if (tokenSetting.key_value === 'YOUR_MASKAWA_TOKEN_HERE') {
-        throw new Error('MASKAWA API token not configured. Please contact support to set up the API token.');
-      }
-
-      this.token = tokenSetting.key_value;
-      this.baseUrl = baseUrlSetting.key_value;
-
-      // Validate URL format
-      try {
-        new URL(this.baseUrl);
-      } catch {
-        throw new Error('Invalid API base URL configuration. Please contact support.');
-      }
-
-      // Ensure URL doesn't end with slash
-      this.baseUrl = this.baseUrl.replace(/\/$/, '');
-      this.initialized = true;
-
-    } catch (error) {
-      console.error('Failed to initialize MASKAWA API:', error);
-      this.initialized = false;
-      throw error;
+  private getEdgeFunctionUrl() {
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    if (!supabaseUrl) {
+      throw new Error('Supabase URL not configured');
     }
+    return `${supabaseUrl}/functions/v1/maskawa-proxy`;
   }
 
-  private async makeRequest(endpoint: string, options: RequestInit = {}) {
-    if (!this.initialized) {
-      await this.initialize();
-    }
-
-    const url = `${this.baseUrl}${endpoint}`;
-    const headers = {
-      'Authorization': `Token ${this.token}`,
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-      ...options.headers,
-    };
-
+  private async makeEdgeFunctionRequest(action: string, data: any) {
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+      const url = this.getEdgeFunctionUrl();
+      const token = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-      console.log(`Making API request to: ${url}`);
-      
+      if (!token) {
+        throw new Error('Supabase anon key not configured');
+      }
+
       const response = await fetch(url, {
-        ...options,
-        headers,
-        signal: controller.signal,
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ action, data }),
       });
 
-      clearTimeout(timeoutId);
-
       if (!response.ok) {
-        let errorMessage = `API request failed: ${response.status}`;
-        
-        try {
-          const errorText = await response.text();
-          if (errorText) {
-            errorMessage += ` - ${errorText}`;
-          }
-        } catch {
-          // If we can't read the error text, use the status code
-        }
-
-        if (response.status === 401) {
-          throw new Error('API authentication failed. Please contact support to verify the API token.');
-        } else if (response.status === 403) {
-          throw new Error('API access denied. Please contact support to verify your account permissions.');
-        } else if (response.status === 404) {
-          throw new Error('API endpoint not found. Please contact support.');
-        } else if (response.status >= 500) {
-          throw new Error('API server error. Please try again later or contact support if the issue persists.');
-        } else {
-          throw new Error(errorMessage);
-        }
+        const errorText = await response.text();
+        throw new Error(`Request failed: ${response.status} - ${errorText}`);
       }
 
-      // Some endpoints don't return JSON
-      const contentType = response.headers.get('content-type');
-      if (contentType && contentType.includes('application/json')) {
-        return await response.json();
+      const result = await response.json();
+      
+      if (!result.success) {
+        throw new Error(result.error || 'API request failed');
       }
 
-      return { success: true, status: response.status };
+      return result.data;
 
     } catch (error: any) {
-      if (error.name === 'AbortError') {
-        throw new Error('Request timeout. Please check your internet connection and try again.');
-      }
+      console.error('Edge function request error:', error);
       
       if (error.message === 'Failed to fetch') {
-        throw new Error('Unable to connect to payment service. Please check your internet connection or contact support if the issue persists.');
+        throw new Error('Unable to connect to payment service. Please check your internet connection and try again.');
       }
-
-      // Check for network-related errors
+      
       if (error.message.includes('NetworkError') || 
           error.message.includes('ERR_NETWORK') ||
           error.message.includes('ERR_INTERNET_DISCONNECTED')) {
         throw new Error('Network connection error. Please check your internet connection and try again.');
       }
 
-      // Check for CORS errors
-      if (error.message.includes('CORS') || error.message.includes('Cross-Origin')) {
-        throw new Error('Service configuration error. Please contact support.');
-      }
-
-      // Re-throw our custom errors
       throw error;
     }
   }
 
   async checkUserDetails() {
-    return await this.makeRequest('/api/user/');
+    // This would need to be implemented if needed
+    throw new Error('User details check not implemented via edge function');
   }
 
   async buyAirtime(data: {
@@ -186,17 +104,10 @@ class MaskawaAPI {
     mobile_number: string;
     ported_number?: boolean;
   }) {
-    const payload = {
-      network: NETWORK_MAPPINGS[data.network],
+    return await this.makeEdgeFunctionRequest('buy_airtime', {
+      network: data.network,
       amount: data.amount,
-      mobile_number: data.mobile_number,
-      Ported_number: data.ported_number ?? true,
-      airtime_type: 'VTU',
-    };
-
-    return await this.makeRequest('/api/topup/', {
-      method: 'POST',
-      body: JSON.stringify(payload),
+      phoneNumber: data.mobile_number,
     });
   }
 
@@ -206,17 +117,10 @@ class MaskawaAPI {
     plan: keyof typeof DATA_PLAN_MAPPINGS;
     ported_number?: boolean;
   }) {
-    const payload = {
-      network: NETWORK_MAPPINGS[data.network],
-      mobile_number: data.mobile_number,
-      plan: DATA_PLAN_MAPPINGS[data.plan],
-      Ported_number: data.ported_number ?? true,
-      payment_medium: 'MAIN WALLET',
-    };
-
-    return await this.makeRequest('/api/data/', {
-      method: 'POST',
-      body: JSON.stringify(payload),
+    return await this.makeEdgeFunctionRequest('buy_data', {
+      network: data.network,
+      phoneNumber: data.mobile_number,
+      plan: data.plan,
     });
   }
 
@@ -226,25 +130,22 @@ class MaskawaAPI {
     meter_number: string;
     meter_type: 'prepaid' | 'postpaid';
   }) {
-    const payload = {
-      disco_name: DISCO_MAPPINGS[data.disco_name],
+    return await this.makeEdgeFunctionRequest('buy_electricity', {
+      disco: data.disco_name,
       amount: data.amount,
-      meter_number: data.meter_number,
-      MeterType: data.meter_type === 'prepaid' ? 1 : 2,
-    };
-
-    return await this.makeRequest('/api/billpayment/', {
-      method: 'POST',
-      body: JSON.stringify(payload),
+      meterNumber: data.meter_number,
+      meterType: data.meter_type,
     });
   }
 
   async getDataTransactions() {
-    return await this.makeRequest('/api/data/');
+    // This would need to be implemented if needed
+    throw new Error('Data transactions retrieval not implemented via edge function');
   }
 
   async getAirtimeTransaction(id: string) {
-    return await this.makeRequest(`/api/data/${id}`);
+    // This would need to be implemented if needed
+    throw new Error('Airtime transaction retrieval not implemented via edge function');
   }
 }
 
