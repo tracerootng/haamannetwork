@@ -527,7 +527,7 @@ const HomePage: React.FC = () => {
           </div>
 
           <div className="border-t border-gray-800 mt-8 sm:mt-12 pt-6 sm:pt-8 flex flex-col md:flex-row justify-between items-center">
-            <p className="text-gray-400 text-sm">© {currentYear} {footerSettings.footer_company_name} All rights reserved.</p>
+            <p className="text-gray-400 text-sm">© {currentYear} {footerSettings.footer_company_name} All rights reserved. Bitcoin</p>
             <div className="flex gap-6 mt-4 md:mt-0">
               <a href="/privacy" className="text-gray-400 hover:text-white transition-colors text-sm">Privacy policy</a>
               <a href="/terms" className="text-gray-400 hover:text-white transition-colors text-sm">Terms of use</a>
