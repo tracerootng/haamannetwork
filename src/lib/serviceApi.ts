@@ -47,7 +47,10 @@ class ServiceAPI {
       .select()
       .single();
 
-    if (dbError) throw dbError;
+    if (dbError) {
+      console.error('Database error creating transaction:', dbError);
+      throw new Error('Failed to create transaction record. Please try again.');
+    }
 
     try {
       // Call MASKAWA API
@@ -70,26 +73,48 @@ class ServiceAPI {
         })
         .eq('id', dbTransaction.id);
 
-      if (updateError) throw updateError;
+      if (updateError) {
+        console.error('Database error updating transaction:', updateError);
+        // Don't throw here as the API call was successful
+      }
 
       return {
         ...dbTransaction,
         status: 'success',
       };
-    } catch (error) {
+    } catch (error: any) {
+      console.error('API error during airtime purchase:', error);
+      
       // Update transaction as failed
-      await supabase
+      const { error: updateError } = await supabase
         .from('transactions')
         .update({
           status: 'failed',
           details: {
             ...transaction.details,
             error: error instanceof Error ? error.message : 'Unknown error',
+            error_time: new Date().toISOString(),
           },
         })
         .eq('id', dbTransaction.id);
 
-      throw error;
+      if (updateError) {
+        console.error('Database error updating failed transaction:', updateError);
+      }
+
+      // Provide user-friendly error messages
+      if (error.message.includes('Unable to connect') || 
+          error.message.includes('timeout') || 
+          error.message.includes('Failed to fetch')) {
+        throw new Error('Unable to connect to payment service. Please check your internet connection and try again.');
+      }
+      
+      if (error.message.includes('API configuration') || 
+          error.message.includes('contact support')) {
+        throw new Error('Service temporarily unavailable. Please contact support or try again later.');
+      }
+
+      throw new Error(error.message || 'Transaction failed. Please try again.');
     }
   }
 
@@ -125,7 +150,10 @@ class ServiceAPI {
       .select()
       .single();
 
-    if (dbError) throw dbError;
+    if (dbError) {
+      console.error('Database error creating transaction:', dbError);
+      throw new Error('Failed to create transaction record. Please try again.');
+    }
 
     try {
       // Call MASKAWA API
@@ -148,26 +176,48 @@ class ServiceAPI {
         })
         .eq('id', dbTransaction.id);
 
-      if (updateError) throw updateError;
+      if (updateError) {
+        console.error('Database error updating transaction:', updateError);
+        // Don't throw here as the API call was successful
+      }
 
       return {
         ...dbTransaction,
         status: 'success',
       };
-    } catch (error) {
+    } catch (error: any) {
+      console.error('API error during data purchase:', error);
+      
       // Update transaction as failed
-      await supabase
+      const { error: updateError } = await supabase
         .from('transactions')
         .update({
           status: 'failed',
           details: {
             ...transaction.details,
             error: error instanceof Error ? error.message : 'Unknown error',
+            error_time: new Date().toISOString(),
           },
         })
         .eq('id', dbTransaction.id);
 
-      throw error;
+      if (updateError) {
+        console.error('Database error updating failed transaction:', updateError);
+      }
+
+      // Provide user-friendly error messages
+      if (error.message.includes('Unable to connect') || 
+          error.message.includes('timeout') || 
+          error.message.includes('Failed to fetch')) {
+        throw new Error('Unable to connect to payment service. Please check your internet connection and try again.');
+      }
+      
+      if (error.message.includes('API configuration') || 
+          error.message.includes('contact support')) {
+        throw new Error('Service temporarily unavailable. Please contact support or try again later.');
+      }
+
+      throw new Error(error.message || 'Transaction failed. Please try again.');
     }
   }
 
@@ -203,7 +253,10 @@ class ServiceAPI {
       .select()
       .single();
 
-    if (dbError) throw dbError;
+    if (dbError) {
+      console.error('Database error creating transaction:', dbError);
+      throw new Error('Failed to create transaction record. Please try again.');
+    }
 
     try {
       // Call MASKAWA API
@@ -227,26 +280,48 @@ class ServiceAPI {
         })
         .eq('id', dbTransaction.id);
 
-      if (updateError) throw updateError;
+      if (updateError) {
+        console.error('Database error updating transaction:', updateError);
+        // Don't throw here as the API call was successful
+      }
 
       return {
         ...dbTransaction,
         status: 'success',
       };
-    } catch (error) {
+    } catch (error: any) {
+      console.error('API error during electricity purchase:', error);
+      
       // Update transaction as failed
-      await supabase
+      const { error: updateError } = await supabase
         .from('transactions')
         .update({
           status: 'failed',
           details: {
             ...transaction.details,
             error: error instanceof Error ? error.message : 'Unknown error',
+            error_time: new Date().toISOString(),
           },
         })
         .eq('id', dbTransaction.id);
 
-      throw error;
+      if (updateError) {
+        console.error('Database error updating failed transaction:', updateError);
+      }
+
+      // Provide user-friendly error messages
+      if (error.message.includes('Unable to connect') || 
+          error.message.includes('timeout') || 
+          error.message.includes('Failed to fetch')) {
+        throw new Error('Unable to connect to payment service. Please check your internet connection and try again.');
+      }
+      
+      if (error.message.includes('API configuration') || 
+          error.message.includes('contact support')) {
+        throw new Error('Service temporarily unavailable. Please contact support or try again later.');
+      }
+
+      throw new Error(error.message || 'Transaction failed. Please try again.');
     }
   }
 }

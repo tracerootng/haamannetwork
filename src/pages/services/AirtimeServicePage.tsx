@@ -67,32 +67,43 @@ const AirtimeServicePage: React.FC = () => {
         throw new Error('Insufficient wallet balance');
       }
 
-      // Deduct from wallet first
-      const newBalance = user.walletBalance - numAmount;
-      await updateWalletBalance(newBalance);
-
-      // Process the airtime transaction
+      // Process the airtime transaction first (before deducting wallet)
       const result = await serviceAPI.processAirtimeTransaction(user.id, {
         network: selectedNetwork,
         amount: numAmount,
         phoneNumber: phoneNumber,
       });
       
+      // Only deduct from wallet if transaction was successful
+      const newBalance = user.walletBalance - numAmount;
+      await updateWalletBalance(newBalance);
+      
       setTransaction(result);
       setIsSuccess(true);
       setStep(3);
     } catch (error: any) {
       console.error('Airtime purchase error:', error);
-      setErrorMessage(error.message || 'Failed to purchase airtime. Please try again.');
+      
+      // Set user-friendly error message
+      let userErrorMessage = 'Failed to purchase airtime. Please try again.';
+      
+      if (error.message === 'Insufficient wallet balance') {
+        userErrorMessage = 'Insufficient wallet balance. Please fund your wallet and try again.';
+      } else if (error.message.includes('Unable to connect') || 
+                 error.message.includes('internet connection')) {
+        userErrorMessage = 'Unable to connect to payment service. Please check your internet connection and try again.';
+      } else if (error.message.includes('Service temporarily unavailable') || 
+                 error.message.includes('contact support')) {
+        userErrorMessage = 'Service temporarily unavailable. Please contact support or try again later.';
+      } else if (error.message.includes('timeout')) {
+        userErrorMessage = 'Request timeout. Please check your internet connection and try again.';
+      } else if (error.message) {
+        userErrorMessage = error.message;
+      }
+      
+      setErrorMessage(userErrorMessage);
       setIsSuccess(false);
       setStep(3);
-      
-      // If wallet was deducted but transaction failed, we should refund
-      // In a real app, you'd want more sophisticated error handling
-      if (user && error.message !== 'Insufficient wallet balance') {
-        // Refund the wallet
-        await updateWalletBalance(user.walletBalance);
-      }
     } finally {
       setIsLoading(false);
     }
