@@ -17,7 +17,10 @@ import {
   Download,
   Smartphone,
   MapPin,
-  Building
+  Building,
+  Key,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../store/authStore';
@@ -36,6 +39,7 @@ const AdminSettings: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState<Record<string, string>>({});
+  const [showApiToken, setShowApiToken] = useState(false);
 
   useEffect(() => {
     if (!user?.isAdmin) {
@@ -47,18 +51,38 @@ const AdminSettings: React.FC = () => {
 
   const fetchSettings = async () => {
     try {
-      const { data, error } = await supabase
+      // Fetch admin settings
+      const { data: adminSettings, error: adminError } = await supabase
         .from('admin_settings')
         .select('*')
         .order('key');
 
-      if (error) throw error;
+      if (adminError) throw adminError;
 
-      setSettings(data || []);
+      // Fetch API settings
+      const { data: apiSettings, error: apiError } = await supabase
+        .from('api_settings')
+        .select('*')
+        .order('key_name');
+
+      if (apiError) throw apiError;
+
+      // Combine both settings
+      const allSettings = [
+        ...(adminSettings || []),
+        ...(apiSettings || []).map(setting => ({
+          id: setting.id,
+          key: setting.key_name,
+          value: setting.key_value,
+          description: setting.description || '',
+        }))
+      ];
+
+      setSettings(allSettings);
       
       // Initialize form data
       const initialFormData: Record<string, string> = {};
-      data?.forEach(setting => {
+      allSettings.forEach(setting => {
         initialFormData[setting.key] = setting.value;
       });
       setFormData(initialFormData);
@@ -72,16 +96,31 @@ const AdminSettings: React.FC = () => {
   const handleSave = async () => {
     setSaving(true);
     try {
-      // Update each setting
+      // Update admin settings
       for (const [key, value] of Object.entries(formData)) {
-        await supabase
-          .from('admin_settings')
-          .update({ 
-            value, 
-            updated_by: user?.id,
-            updated_at: new Date().toISOString()
-          })
-          .eq('key', key);
+        const setting = settings.find(s => s.key === key);
+        if (!setting) continue;
+
+        // Check if it's an API setting
+        if (key.includes('maskawa') || key.includes('api')) {
+          await supabase
+            .from('api_settings')
+            .update({ 
+              key_value: value, 
+              updated_by: user?.id,
+              updated_at: new Date().toISOString()
+            })
+            .eq('key_name', key);
+        } else {
+          await supabase
+            .from('admin_settings')
+            .update({ 
+              value, 
+              updated_by: user?.id,
+              updated_at: new Date().toISOString()
+            })
+            .eq('key', key);
+        }
       }
 
       // Log admin action
@@ -138,12 +177,16 @@ const AdminSettings: React.FC = () => {
         return <Download className="text-indigo-500" size={20} />;
       case 'download_app_enabled':
         return <Smartphone className="text-indigo-500" size={20} />;
+      case 'maskawa_token':
+      case 'maskawa_base_url':
+        return <Key className="text-red-500" size={20} />;
       default:
         return <Settings className="text-gray-500" size={20} />;
     }
   };
 
   const settingCategories = {
+    'API Configuration': ['maskawa_token', 'maskawa_base_url'],
     'General': ['site_name', 'support_email', 'support_phone'],
     'Footer Information': ['footer_company_name', 'footer_email', 'footer_phone', 'footer_address'],
     'Homepage Banners': ['hero_banner_image', 'hero_banner_image_alt', 'steps_banner_image'],
@@ -177,7 +220,7 @@ const AdminSettings: React.FC = () => {
               </button>
               <div>
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Admin Settings</h1>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Configure application settings, homepage content, and footer information</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Configure application settings, API tokens, and homepage content</p>
               </div>
             </div>
             
@@ -203,7 +246,7 @@ const AdminSettings: React.FC = () => {
                 Important Notice
               </h3>
               <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
-                Changes to these settings will affect the entire application, homepage appearance, and footer information. Please review carefully before saving.
+                Changes to these settings will affect the entire application. API tokens are sensitive - handle with care.
               </p>
             </div>
           </div>
@@ -215,24 +258,14 @@ const AdminSettings: React.FC = () => {
             <div key={category} className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
               <div className="p-6 border-b border-gray-200 dark:border-gray-700">
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{category}</h2>
+                {category === 'API Configuration' && (
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                    Configure MASKAWASUBAPI integration settings for airtime, data, and electricity services
+                  </p>
+                )}
                 {category === 'Footer Information' && (
                   <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                     Manage contact information and company details displayed in the website footer
-                  </p>
-                )}
-                {category === 'Homepage Banners' && (
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                    Manage banner images displayed on the homepage hero and steps sections
-                  </p>
-                )}
-                {category === 'Homepage Content' && (
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                    Customize text content displayed on the homepage
-                  </p>
-                )}
-                {category === 'Download App' && (
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                    Configure the download app button on the homepage
                   </p>
                 )}
               </div>
@@ -265,6 +298,27 @@ const AdminSettings: React.FC = () => {
                             <option value="false">Disabled</option>
                             <option value="true">Enabled</option>
                           </select>
+                        ) : setting.key === 'maskawa_token' ? (
+                          <div className="relative">
+                            <input
+                              type={showApiToken ? 'text' : 'password'}
+                              value={formData[key] || setting.value}
+                              onChange={(e) => handleChange(key, e.target.value)}
+                              placeholder="Enter MASKAWA API token"
+                              className="w-full px-3 py-2 pr-10 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0F9D58]"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowApiToken(!showApiToken)}
+                              className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                            >
+                              {showApiToken ? (
+                                <EyeOff className="h-4 w-4 text-gray-400" />
+                              ) : (
+                                <Eye className="h-4 w-4 text-gray-400" />
+                              )}
+                            </button>
+                          </div>
                         ) : setting.key.includes('image') ? (
                           <div className="space-y-3">
                             <input
@@ -303,7 +357,7 @@ const AdminSettings: React.FC = () => {
                             type="url"
                             value={formData[key] || setting.value}
                             onChange={(e) => handleChange(key, e.target.value)}
-                            placeholder="Enter URL (e.g., https://play.google.com/store/apps)"
+                            placeholder="Enter URL"
                             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0F9D58]"
                           />
                         ) : setting.key.includes('percentage') || setting.key.includes('amount') || setting.key.includes('balance') ? (
@@ -338,33 +392,15 @@ const AdminSettings: React.FC = () => {
                           />
                         )}
                         
-                        {setting.key === 'referral_bonus_percentage' && (
-                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                            Current value: {formData[key] || setting.value}% bonus on first referral deposit
+                        {setting.key === 'maskawa_token' && (
+                          <p className="text-xs text-red-500 dark:text-red-400 mt-1">
+                            ⚠️ Keep this token secure. It's used for all service transactions.
                           </p>
                         )}
                         
-                        {setting.key.includes('amount') && (
+                        {setting.key === 'maskawa_base_url' && (
                           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                            Amount in Naira (₦)
-                          </p>
-                        )}
-
-                        {setting.key.includes('image') && (
-                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                            Recommended: High-quality images (1200x600px or larger) from Pexels, Unsplash, or similar
-                          </p>
-                        )}
-
-                        {setting.key === 'download_app_url' && (
-                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                            Link to your app on Play Store, App Store, or direct download
-                          </p>
-                        )}
-
-                        {setting.key.includes('footer_') && (
-                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                            This information will be displayed in the website footer
+                            Base URL for MASKAWASUBAPI (usually https://maskawasubapi.com)
                           </p>
                         )}
                       </div>
@@ -376,19 +412,16 @@ const AdminSettings: React.FC = () => {
           ))}
         </div>
 
-        {/* Additional Settings Info */}
+        {/* API Integration Info */}
         <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-6 mt-8">
           <h3 className="text-lg font-semibold text-blue-900 dark:text-blue-100 mb-4">
-            Settings Information
+            API Integration Information
           </h3>
           <div className="space-y-3 text-sm text-blue-800 dark:text-blue-200">
-            <p>• <strong>Footer Information:</strong> Contact details and company information displayed at the bottom of every page</p>
-            <p>• <strong>Homepage Banners:</strong> Control the main hero image and steps section image displayed on the homepage</p>
-            <p>• <strong>Homepage Content:</strong> Customize the main title, subtitle, and steps section title text</p>
-            <p>• <strong>Download App:</strong> Enable/disable and configure the download app button on the homepage</p>
-            <p>• <strong>Referral Bonus Percentage:</strong> The percentage bonus users receive when their referrals make their first deposit</p>
-            <p>• <strong>Transaction Limits:</strong> Set minimum and maximum amounts for transactions to prevent abuse</p>
-            <p>• <strong>Maintenance Mode:</strong> When enabled, the site will show a maintenance message to users</p>
+            <p>• <strong>MASKAWA Token:</strong> Required for airtime, data, and electricity bill payments</p>
+            <p>• <strong>Base URL:</strong> The API endpoint for MASKAWASUBAPI service</p>
+            <p>• <strong>Security:</strong> API tokens are encrypted and only accessible to admin users</p>
+            <p>• <strong>Testing:</strong> Use the services to verify API integration is working correctly</p>
           </div>
         </div>
       </div>

@@ -4,18 +4,19 @@ import { useNavigate } from 'react-router-dom';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import { useAuthStore } from '../../store/authStore';
-import { formatCurrency, generateTransactionReference } from '../../lib/utils';
+import { serviceAPI } from '../../lib/serviceApi';
+import { formatCurrency } from '../../lib/utils';
 
 const networkProviders = [
-  { 
-    value: 'airtel', 
-    label: 'Airtel',
-    color: 'bg-red-500'
-  },
   { 
     value: 'mtn', 
     label: 'MTN',
     color: 'bg-yellow-500'
+  },
+  { 
+    value: 'airtel', 
+    label: 'Airtel',
+    color: 'bg-red-500'
   },
   { 
     value: 'glo', 
@@ -41,6 +42,7 @@ const AirtimeServicePage: React.FC = () => {
   const [serviceType, setServiceType] = useState('local');
   const [isSuccess, setIsSuccess] = useState<boolean | null>(null);
   const [transaction, setTransaction] = useState<any>(null);
+  const [errorMessage, setErrorMessage] = useState('');
 
   const handleContinue = () => {
     if (!selectedNetwork || !phoneNumber || !amount) {
@@ -56,40 +58,41 @@ const AirtimeServicePage: React.FC = () => {
     }
 
     setIsLoading(true);
+    setErrorMessage('');
 
     try {
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
       const numAmount = Number(amount);
       
       if (user.walletBalance < numAmount) {
-        throw new Error('Insufficient funds');
+        throw new Error('Insufficient wallet balance');
       }
-      
-      const reference = generateTransactionReference();
-      const newTransaction = {
-        id: Math.random().toString(36).substr(2, 9),
-        userId: user.id,
-        type: 'airtime',
+
+      // Deduct from wallet first
+      const newBalance = user.walletBalance - numAmount;
+      await updateWalletBalance(newBalance);
+
+      // Process the airtime transaction
+      const result = await serviceAPI.processAirtimeTransaction(user.id, {
+        network: selectedNetwork,
         amount: numAmount,
-        status: 'success',
-        reference,
-        details: {
-          network: selectedNetwork,
-          phone: phoneNumber,
-        },
-        createdAt: new Date().toISOString(),
-      };
+        phoneNumber: phoneNumber,
+      });
       
-      updateWalletBalance(user.walletBalance - numAmount);
-      
-      setTransaction(newTransaction);
+      setTransaction(result);
       setIsSuccess(true);
       setStep(3);
-    } catch (error) {
-      console.error(error);
+    } catch (error: any) {
+      console.error('Airtime purchase error:', error);
+      setErrorMessage(error.message || 'Failed to purchase airtime. Please try again.');
       setIsSuccess(false);
       setStep(3);
+      
+      // If wallet was deducted but transaction failed, we should refund
+      // In a real app, you'd want more sophisticated error handling
+      if (user && error.message !== 'Insufficient wallet balance') {
+        // Refund the wallet
+        await updateWalletBalance(user.walletBalance);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -249,9 +252,14 @@ const AirtimeServicePage: React.FC = () => {
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               placeholder="0.00"
+              min="100"
+              max="50000"
               className="w-full pl-8 pr-4 py-4 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#0F9D58] focus:border-transparent"
             />
           </div>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            Minimum: ₦100, Maximum: ₦50,000
+          </p>
         </div>
 
         {/* Save as Beneficiary Toggle */}
@@ -278,7 +286,7 @@ const AirtimeServicePage: React.FC = () => {
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
         <Button
           onClick={handleContinue}
-          disabled={!selectedNetwork || !phoneNumber || !amount}
+          disabled={!selectedNetwork || !phoneNumber || !amount || Number(amount) < 100}
           className="w-full bg-[#0F9D58] hover:bg-[#0d8a4f] text-white py-4 rounded-xl font-semibold text-lg disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Continue
@@ -404,6 +412,9 @@ const AirtimeServicePage: React.FC = () => {
                   setPhoneNumber('');
                   setAmount('');
                   setSaveAsBeneficiary(false);
+                  setIsSuccess(null);
+                  setTransaction(null);
+                  setErrorMessage('');
                 }}
                 className="flex-1 bg-[#0F9D58] hover:bg-[#0d8a4f] text-white"
               >
@@ -419,11 +430,15 @@ const AirtimeServicePage: React.FC = () => {
             
             <h2 className="text-xl font-semibold mb-2 text-gray-900 dark:text-white">Purchase Failed</h2>
             <p className="text-gray-600 dark:text-gray-400 mb-6">
-              Your airtime purchase could not be completed. Please try again.
+              {errorMessage || 'Your airtime purchase could not be completed. Please try again.'}
             </p>
             
             <Button
-              onClick={() => setStep(1)}
+              onClick={() => {
+                setStep(1);
+                setIsSuccess(null);
+                setErrorMessage('');
+              }}
               className="w-full bg-[#0F9D58] hover:bg-[#0d8a4f] text-white"
             >
               Try Again

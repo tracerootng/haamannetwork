@@ -4,7 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import { useAuthStore } from '../../store/authStore';
-import { formatCurrency, generateTransactionReference } from '../../lib/utils';
+import { serviceAPI } from '../../lib/serviceApi';
+import { formatCurrency } from '../../lib/utils';
 
 const networkProviders = [
   { 
@@ -26,13 +27,6 @@ const networkProviders = [
     value: '9mobile', 
     label: '9mobile',
     color: 'bg-teal-500'
-  },
-  { 
-    value: '9mobile-data', 
-    label: '9mobile',
-    color: 'bg-teal-500',
-    badge: 'DATA',
-    isSecondRow: true
   },
 ];
 
@@ -68,6 +62,7 @@ const DataServicePage: React.FC = () => {
   const [showPlanDropdown, setShowPlanDropdown] = useState(false);
   const [isSuccess, setIsSuccess] = useState<boolean | null>(null);
   const [transaction, setTransaction] = useState<any>(null);
+  const [errorMessage, setErrorMessage] = useState('');
 
   const filteredPlans = selectedNetwork 
     ? dataPlans.filter(plan => plan.network === selectedNetwork)
@@ -90,41 +85,41 @@ const DataServicePage: React.FC = () => {
     }
 
     setIsLoading(true);
+    setErrorMessage('');
 
     try {
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
       const amount = selectedPlanData.price;
       
       if (user.walletBalance < amount) {
-        throw new Error('Insufficient funds');
+        throw new Error('Insufficient wallet balance');
       }
+
+      // Deduct from wallet first
+      const newBalance = user.walletBalance - amount;
+      await updateWalletBalance(newBalance);
+
+      // Process the data transaction
+      const result = await serviceAPI.processDataTransaction(user.id, {
+        network: selectedNetwork,
+        plan: selectedPlan,
+        phoneNumber: phoneNumber,
+        amount: amount,
+      });
       
-      const reference = generateTransactionReference();
-      const newTransaction = {
-        id: Math.random().toString(36).substr(2, 9),
-        userId: user.id,
-        type: 'data',
-        amount,
-        status: 'success',
-        reference,
-        details: {
-          network: selectedNetwork,
-          plan: selectedPlanData.label,
-          phone: phoneNumber,
-        },
-        createdAt: new Date().toISOString(),
-      };
-      
-      updateWalletBalance(user.walletBalance - amount);
-      
-      setTransaction(newTransaction);
+      setTransaction(result);
       setIsSuccess(true);
       setStep(3);
-    } catch (error) {
-      console.error(error);
+    } catch (error: any) {
+      console.error('Data purchase error:', error);
+      setErrorMessage(error.message || 'Failed to purchase data. Please try again.');
       setIsSuccess(false);
       setStep(3);
+      
+      // If wallet was deducted but transaction failed, we should refund
+      if (user && error.message !== 'Insufficient wallet balance') {
+        // Refund the wallet
+        await updateWalletBalance(user.walletBalance);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -227,36 +222,15 @@ const DataServicePage: React.FC = () => {
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
             Select Service Provider
           </h2>
-          <div className="grid grid-cols-4 gap-4 mb-4">
-            {networkProviders.filter(provider => !provider.isSecondRow).map((provider) => (
-              <button
-                key={provider.value}
-                onClick={() => setSelectedNetwork(provider.value)}
-                className={`relative flex flex-col items-center p-4 rounded-2xl border-2 transition-all ${
-                  selectedNetwork === provider.value
-                    ? 'border-[#0F9D58] bg-[#0F9D58]/5'
-                    : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800'
-                }`}
-              >
-                <div className={`w-12 h-12 rounded-full flex items-center justify-center mb-2 ${provider.color}`}>
-                  <span className="text-white font-bold text-sm">
-                    {provider.label.charAt(0)}
-                  </span>
-                </div>
-                <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
-                  {provider.label}
-                </span>
-              </button>
-            ))}
-          </div>
-          
-          {/* Second row for additional providers */}
           <div className="grid grid-cols-4 gap-4">
-            {networkProviders.filter(provider => provider.isSecondRow).map((provider) => (
+            {networkProviders.map((provider) => (
               <button
                 key={provider.value}
-                onClick={() => setSelectedNetwork(provider.value)}
-                className={`relative flex flex-col items-center p-4 rounded-2xl border-2 transition-all ${
+                onClick={() => {
+                  setSelectedNetwork(provider.value);
+                  setSelectedPlan(''); // Reset plan when network changes
+                }}
+                className={`flex flex-col items-center p-4 rounded-2xl border-2 transition-all ${
                   selectedNetwork === provider.value
                     ? 'border-[#0F9D58] bg-[#0F9D58]/5'
                     : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800'
@@ -270,17 +244,8 @@ const DataServicePage: React.FC = () => {
                 <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
                   {provider.label}
                 </span>
-                {provider.badge && (
-                  <span className="absolute -top-1 -right-1 bg-[#0F9D58] text-white text-xs px-1.5 py-0.5 rounded-full font-bold">
-                    {provider.badge}
-                  </span>
-                )}
               </button>
             ))}
-            {/* Empty cells to maintain grid */}
-            <div></div>
-            <div></div>
-            <div></div>
           </div>
         </div>
 
@@ -292,15 +257,16 @@ const DataServicePage: React.FC = () => {
           <div className="relative">
             <button
               onClick={() => setShowPlanDropdown(!showPlanDropdown)}
-              className="w-full px-4 py-4 pr-12 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 text-left text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0F9D58] focus:border-transparent"
+              disabled={!selectedNetwork}
+              className="w-full px-4 py-4 pr-12 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 text-left text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0F9D58] focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {selectedPlanData ? selectedPlanData.label : 'Select a data plan'}
+              {selectedPlanData ? selectedPlanData.label : selectedNetwork ? 'Select a data plan' : 'Select network first'}
             </button>
             <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
               <ChevronDown size={20} className={`text-gray-500 transition-transform ${showPlanDropdown ? 'rotate-180' : ''}`} />
             </div>
             
-            {showPlanDropdown && (
+            {showPlanDropdown && selectedNetwork && (
               <div className="absolute z-10 w-full mt-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-xl shadow-lg max-h-60 overflow-y-auto">
                 {filteredPlans.map((plan) => (
                   <button
@@ -513,6 +479,9 @@ const DataServicePage: React.FC = () => {
                   setSelectedPlan('');
                   setPhoneNumber('');
                   setSaveAsBeneficiary(false);
+                  setIsSuccess(null);
+                  setTransaction(null);
+                  setErrorMessage('');
                 }}
                 className="flex-1 bg-[#0F9D58] hover:bg-[#0d8a4f] text-white"
               >
@@ -530,11 +499,15 @@ const DataServicePage: React.FC = () => {
             
             <h2 className="text-xl font-semibold mb-2 text-gray-900 dark:text-white">Purchase Failed</h2>
             <p className="text-gray-600 dark:text-gray-400 mb-6">
-              Your data bundle purchase could not be completed. Please try again.
+              {errorMessage || 'Your data bundle purchase could not be completed. Please try again.'}
             </p>
             
             <Button
-              onClick={() => setStep(1)}
+              onClick={() => {
+                setStep(1);
+                setIsSuccess(null);
+                setErrorMessage('');
+              }}
               className="w-full bg-[#0F9D58] hover:bg-[#0d8a4f] text-white"
             >
               Try Again
