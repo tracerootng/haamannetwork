@@ -164,7 +164,7 @@ const AirtimeServicePage: React.FC = () => {
   );
 
   const renderStepOne = () => (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-20">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-32">
       {/* Header */}
       <div className="bg-white dark:bg-gray-800 px-4 py-4 flex items-center border-b border-gray-200 dark:border-gray-700">
         <button
@@ -294,7 +294,7 @@ const AirtimeServicePage: React.FC = () => {
       </div>
 
       {/* Continue Button */}
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 z-10">
+      <div className="fixed bottom-[4.5rem] left-0 right-0 p-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 z-[60]">
         <Button
           onClick={handleContinue}
           disabled={!selectedNetwork || !phoneNumber || !amount || Number(amount) < 100}
@@ -303,6 +303,7 @@ const AirtimeServicePage: React.FC = () => {
           Continue
         </Button>
       </div>
+      <div className="pb-32"></div>
     </div>
   );
 
