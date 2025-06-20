@@ -16,7 +16,7 @@ const HomePage: React.FC = () => {
     hero_banner_image_alt: 'https://images.pexels.com/photos/4386321/pexels-photo-4386321.jpeg',
     steps_banner_image: 'https://images.pexels.com/photos/4386321/pexels-photo-4386321.jpeg',
     hero_title: 'The Ultimate Digital Services & E-commerce Platform.',
-    hero_subtitle: 'Pay bills, shop online, and manage your digital life all in one secure platform.',
+    hero_subtitle: 'Pay bills, shop online, and manage your digital life all in one secure platform. Now with Bitcoin!',
     steps_title: '3 Simple Steps to Enjoy Haaman Network.',
     download_app_url: 'https://play.google.com/store/apps',
     download_app_enabled: 'true',
@@ -204,7 +204,7 @@ const HomePage: React.FC = () => {
               {/* New Badge */}
               <div className="inline-flex items-center bg-white bg-opacity-20 backdrop-blur-sm rounded-full px-4 py-2 text-white">
                 <span className="bg-white text-[#0F9D58] px-2 py-1 rounded-full text-xs font-bold mr-3">New</span>
-                <span className="text-sm">Haaman Network is live in Nigeria →</span>
+                <span className="text-sm">Haaman Network now accepts Bitcoin! →</span>
               </div>
 
               <div className="space-y-4 sm:space-y-6">
