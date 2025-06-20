@@ -1,53 +1,62 @@
-import React, { useState } from 'react';
-import { ArrowLeft, User, ChevronDown } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { ArrowLeft, User, Search, Filter, Star, Zap } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { supabase } from '../../lib/supabase';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
+import Badge from '../../components/ui/Badge';
 import { useAuthStore } from '../../store/authStore';
 import { serviceAPI } from '../../lib/serviceApi';
 import { formatCurrency } from '../../lib/utils';
 
 const networkProviders = [
   { 
-    value: 'mtn', 
+    value: 'MTN', 
     label: 'MTN',
     color: 'bg-yellow-500'
   },
   { 
-    value: 'airtel', 
+    value: 'AIRTEL', 
     label: 'Airtel',
     color: 'bg-red-500'
   },
   { 
-    value: 'glo', 
+    value: 'GLO', 
     label: 'Glo',
     color: 'bg-green-500'
   },
   { 
-    value: '9mobile', 
+    value: '9MOBILE', 
     label: '9mobile',
     color: 'bg-teal-500'
   },
 ];
 
-const dataPlans = [
-  { value: 'mtn-500mb-30days', label: 'MTN 500MB - ₦150 (30 days)', price: 150, network: 'mtn' },
-  { value: 'mtn-1gb-30days', label: 'MTN 1GB - ₦300 (30 days)', price: 300, network: 'mtn' },
-  { value: 'mtn-2gb-30days', label: 'MTN 2GB - ₦500 (30 days)', price: 500, network: 'mtn' },
-  { value: 'mtn-5gb-30days', label: 'MTN 5GB - ₦1200 (30 days)', price: 1200, network: 'mtn' },
-  { value: 'airtel-500mb-30days', label: 'Airtel 500MB - ₦150 (30 days)', price: 150, network: 'airtel' },
-  { value: 'airtel-1gb-30days', label: 'Airtel 1GB - ₦300 (30 days)', price: 300, network: 'airtel' },
-  { value: 'airtel-2gb-30days', label: 'Airtel 2GB - ₦500 (30 days)', price: 500, network: 'airtel' },
-  { value: 'airtel-5gb-30days', label: 'Airtel 5GB - ₦1200 (30 days)', price: 1200, network: 'airtel' },
-  { value: 'glo-500mb-30days', label: 'Glo 500MB - ₦150 (30 days)', price: 150, network: 'glo' },
-  { value: 'glo-1gb-30days', label: 'Glo 1GB - ₦300 (30 days)', price: 300, network: 'glo' },
-  { value: 'glo-2gb-30days', label: 'Glo 2GB - ₦500 (30 days)', price: 500, network: 'glo' },
-  { value: 'glo-5gb-30days', label: 'Glo 5GB - ₦1200 (30 days)', price: 1200, network: 'glo' },
-  { value: '9mobile-500mb-30days', label: '9mobile 500MB - ₦150 (30 days)', price: 150, network: '9mobile' },
-  { value: '9mobile-1gb-30days', label: '9mobile 1GB - ₦300 (30 days)', price: 300, network: '9mobile' },
-  { value: '9mobile-2gb-30days', label: '9mobile 2GB - ₦500 (30 days)', price: 500, network: '9mobile' },
-  { value: '9mobile-5gb-30days', label: '9mobile 5GB - ₦1200 (30 days)', price: 1200, network: '9mobile' },
-];
+type DataPlan = {
+  id: string;
+  external_id: number;
+  network: string;
+  plan_type: string;
+  size: string;
+  validity: string;
+  cost_price: number;
+  selling_price: number;
+  profit_margin: number;
+  description: string;
+  is_active: boolean;
+  is_popular: boolean;
+  sort_order: number;
+};
+
+type DataPlanCategory = {
+  id: string;
+  network: string;
+  plan_type: string;
+  display_name: string;
+  description: string;
+  is_active: boolean;
+  sort_order: number;
+};
 
 const DataServicePage: React.FC = () => {
   const navigate = useNavigate();
@@ -55,21 +64,78 @@ const DataServicePage: React.FC = () => {
   const [step, setStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedNetwork, setSelectedNetwork] = useState('');
-  const [selectedPlan, setSelectedPlan] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('');
+  const [selectedPlan, setSelectedPlan] = useState<DataPlan | null>(null);
   const [phoneNumber, setPhoneNumber] = useState('');
   const [saveAsBeneficiary, setSaveAsBeneficiary] = useState(false);
   const [serviceType, setServiceType] = useState('local');
-  const [showPlanDropdown, setShowPlanDropdown] = useState(false);
   const [isSuccess, setIsSuccess] = useState<boolean | null>(null);
   const [transaction, setTransaction] = useState<any>(null);
   const [errorMessage, setErrorMessage] = useState('');
+  
+  // Data plans state
+  const [dataPlans, setDataPlans] = useState<DataPlan[]>([]);
+  const [categories, setCategories] = useState<DataPlanCategory[]>([]);
+  const [loadingPlans, setLoadingPlans] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
 
-  const filteredPlans = selectedNetwork 
-    ? dataPlans.filter(plan => plan.network === selectedNetwork)
-    : dataPlans;
+  useEffect(() => {
+    fetchDataPlans();
+    fetchCategories();
+  }, []);
 
-  const selectedPlanData = dataPlans.find(plan => plan.value === selectedPlan);
-  const selectedNetworkData = networkProviders.find(provider => provider.value === selectedNetwork);
+  const fetchDataPlans = async () => {
+    setLoadingPlans(true);
+    try {
+      const { data, error } = await supabase
+        .from('data_plans')
+        .select('*')
+        .eq('is_active', true)
+        .order('network')
+        .order('sort_order');
+
+      if (error) throw error;
+      setDataPlans(data || []);
+    } catch (error) {
+      console.error('Error fetching data plans:', error);
+    } finally {
+      setLoadingPlans(false);
+    }
+  };
+
+  const fetchCategories = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('data_plan_categories')
+        .select('*')
+        .eq('is_active', true)
+        .order('network')
+        .order('sort_order');
+
+      if (error) throw error;
+      setCategories(data || []);
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+    }
+  };
+
+  const filteredPlans = dataPlans.filter(plan => {
+    const matchesNetwork = !selectedNetwork || plan.network === selectedNetwork;
+    const matchesCategory = !selectedCategory || plan.plan_type === selectedCategory;
+    const matchesSearch = !searchQuery || 
+      plan.size.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      plan.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      plan.validity.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    return matchesNetwork && matchesCategory && matchesSearch;
+  });
+
+  const availableCategories = categories.filter(cat => 
+    !selectedNetwork || cat.network === selectedNetwork
+  );
+
+  const popularPlans = filteredPlans.filter(plan => plan.is_popular).slice(0, 3);
 
   const handleContinue = () => {
     if (!selectedNetwork || !selectedPlan || !phoneNumber) {
@@ -79,7 +145,7 @@ const DataServicePage: React.FC = () => {
   };
 
   const handlePayment = async () => {
-    if (!user || !selectedPlanData) {
+    if (!user || !selectedPlan) {
       navigate('/login');
       return;
     }
@@ -88,7 +154,7 @@ const DataServicePage: React.FC = () => {
     setErrorMessage('');
 
     try {
-      const amount = selectedPlanData.price;
+      const amount = selectedPlan.selling_price;
       
       if (user.walletBalance < amount) {
         throw new Error('Insufficient wallet balance');
@@ -98,10 +164,10 @@ const DataServicePage: React.FC = () => {
       const newBalance = user.walletBalance - amount;
       await updateWalletBalance(newBalance);
 
-      // Process the data transaction
+      // Process the data transaction using external_id
       const result = await serviceAPI.processDataTransaction(user.id, {
-        network: selectedNetwork,
-        plan: selectedPlan,
+        network: selectedNetwork.toLowerCase(),
+        plan: selectedPlan.external_id.toString(),
         phoneNumber: phoneNumber,
         amount: amount,
       });
@@ -220,7 +286,7 @@ const DataServicePage: React.FC = () => {
         {/* Network Provider Selection */}
         <div>
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-            Select Service Provider
+            Select Network Provider
           </h2>
           <div className="grid grid-cols-4 gap-4">
             {networkProviders.map((provider) => (
@@ -228,7 +294,8 @@ const DataServicePage: React.FC = () => {
                 key={provider.value}
                 onClick={() => {
                   setSelectedNetwork(provider.value);
-                  setSelectedPlan(''); // Reset plan when network changes
+                  setSelectedCategory(''); // Reset category when network changes
+                  setSelectedPlan(null); // Reset plan when network changes
                 }}
                 className={`flex flex-col items-center p-4 rounded-2xl border-2 transition-all ${
                   selectedNetwork === provider.value
@@ -249,41 +316,147 @@ const DataServicePage: React.FC = () => {
           </div>
         </div>
 
-        {/* Data Package Selection */}
-        <div>
-          <label className="block text-lg font-semibold text-gray-900 dark:text-white mb-3">
-            Select data package
-          </label>
-          <div className="relative">
-            <button
-              onClick={() => setShowPlanDropdown(!showPlanDropdown)}
-              disabled={!selectedNetwork}
-              className="w-full px-4 py-4 pr-12 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 text-left text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0F9D58] focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {selectedPlanData ? selectedPlanData.label : selectedNetwork ? 'Select a data plan' : 'Select network first'}
-            </button>
-            <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
-              <ChevronDown size={20} className={`text-gray-500 transition-transform ${showPlanDropdown ? 'rotate-180' : ''}`} />
+        {/* Search and Filters */}
+        {selectedNetwork && (
+          <div className="space-y-4">
+            <div className="flex items-center space-x-3">
+              <div className="flex-1 relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
+                <input
+                  type="text"
+                  placeholder="Search data plans..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#0F9D58] focus:border-transparent"
+                />
+              </div>
+              <button
+                onClick={() => setShowFilters(!showFilters)}
+                className="p-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              >
+                <Filter size={16} className="text-gray-500" />
+              </button>
             </div>
-            
-            {showPlanDropdown && selectedNetwork && (
-              <div className="absolute z-10 w-full mt-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-xl shadow-lg max-h-60 overflow-y-auto">
-                {filteredPlans.map((plan) => (
+
+            {/* Category Filter */}
+            {showFilters && availableCategories.length > 0 && (
+              <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+                <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Plan Type</h3>
+                <div className="flex flex-wrap gap-2">
                   <button
-                    key={plan.value}
-                    onClick={() => {
-                      setSelectedPlan(plan.value);
-                      setShowPlanDropdown(false);
-                    }}
-                    className="w-full px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-900 dark:text-white border-b border-gray-100 dark:border-gray-700 last:border-b-0"
+                    onClick={() => setSelectedCategory('')}
+                    className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                      !selectedCategory
+                        ? 'bg-[#0F9D58] text-white'
+                        : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                    }`}
                   >
-                    {plan.label}
+                    All Plans
                   </button>
-                ))}
+                  {availableCategories.map((category) => (
+                    <button
+                      key={category.id}
+                      onClick={() => setSelectedCategory(category.plan_type)}
+                      className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                        selectedCategory === category.plan_type
+                          ? 'bg-[#0F9D58] text-white'
+                          : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                      }`}
+                    >
+                      {category.display_name}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
           </div>
-        </div>
+        )}
+
+        {/* Popular Plans */}
+        {selectedNetwork && popularPlans.length > 0 && (
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Popular Plans</h3>
+            <div className="space-y-3">
+              {popularPlans.map((plan) => (
+                <button
+                  key={plan.id}
+                  onClick={() => setSelectedPlan(plan)}
+                  className={`w-full flex items-center justify-between p-4 rounded-xl border-2 transition-all ${
+                    selectedPlan?.id === plan.id
+                      ? 'border-[#0F9D58] bg-[#0F9D58]/5'
+                      : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800'
+                  }`}
+                >
+                  <div className="flex items-center">
+                    <div className="w-10 h-10 rounded-full bg-[#0F9D58]/10 flex items-center justify-center mr-3">
+                      <Zap size={16} className="text-[#0F9D58]" />
+                    </div>
+                    <div className="text-left">
+                      <p className="font-medium text-gray-900 dark:text-white">{plan.size}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">{plan.validity}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-bold text-[#0F9D58]">{formatCurrency(plan.selling_price)}</p>
+                    <div className="flex items-center mt-1">
+                      <Star size={12} className="text-yellow-400 fill-current" />
+                      <span className="text-xs text-gray-500 dark:text-gray-400 ml-1">Popular</span>
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* All Data Plans */}
+        {selectedNetwork && (
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">
+              {selectedCategory ? 
+                categories.find(c => c.plan_type === selectedCategory)?.display_name || 'Data Plans' : 
+                'All Data Plans'}
+            </h3>
+            
+            {loadingPlans ? (
+              <div className="flex justify-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#0F9D58]"></div>
+              </div>
+            ) : filteredPlans.length > 0 ? (
+              <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
+                {filteredPlans.map((plan) => (
+                  <button
+                    key={plan.id}
+                    onClick={() => setSelectedPlan(plan)}
+                    className={`w-full flex items-center justify-between p-4 rounded-xl border transition-all ${
+                      selectedPlan?.id === plan.id
+                        ? 'border-[#0F9D58] bg-[#0F9D58]/5'
+                        : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800'
+                    }`}
+                  >
+                    <div className="flex-1 text-left">
+                      <div className="flex items-center">
+                        <p className="font-medium text-gray-900 dark:text-white">{plan.size}</p>
+                        {plan.is_popular && (
+                          <Badge className="ml-2 bg-yellow-100 text-yellow-800 text-xs">Popular</Badge>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">{plan.validity}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{plan.description}</p>
+                    </div>
+                    <div className="text-right ml-4">
+                      <p className="font-bold text-[#0F9D58]">{formatCurrency(plan.selling_price)}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="bg-white dark:bg-gray-800 rounded-xl p-6 text-center border border-gray-200 dark:border-gray-700">
+                <p className="text-gray-500 dark:text-gray-400">No data plans found matching your criteria.</p>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Phone Number Input */}
         <div>
@@ -304,17 +477,19 @@ const DataServicePage: React.FC = () => {
           </div>
         </div>
 
-        {/* Amount Display */}
-        <div>
-          <label className="block text-lg font-semibold text-gray-900 dark:text-white mb-3">
-            Amount
-          </label>
-          <div className="px-4 py-4 border border-gray-300 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-700">
-            <span className="text-lg font-semibold text-gray-900 dark:text-white">
-              ₦{selectedPlanData ? selectedPlanData.price : 0}
-            </span>
+        {/* Selected Plan Summary */}
+        {selectedPlan && (
+          <div className="bg-[#0F9D58]/10 rounded-xl p-4 border border-[#0F9D58]/20">
+            <h3 className="font-semibold text-gray-900 dark:text-white mb-2">Selected Plan</h3>
+            <div className="flex justify-between items-center">
+              <div>
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-300">{selectedPlan.description}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">{selectedPlan.size} for {selectedPlan.validity}</p>
+              </div>
+              <p className="font-bold text-[#0F9D58] text-lg">{formatCurrency(selectedPlan.selling_price)}</p>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Save as Beneficiary Toggle */}
         <div className="flex items-center justify-between py-2">
@@ -370,14 +545,21 @@ const DataServicePage: React.FC = () => {
             <div className="flex justify-between py-3 border-b border-gray-200 dark:border-gray-700">
               <span className="text-gray-600 dark:text-gray-400">Network</span>
               <span className="font-medium text-gray-900 dark:text-white">
-                {selectedNetworkData?.label}
+                {networkProviders.find(n => n.value === selectedNetwork)?.label}
               </span>
             </div>
             
             <div className="flex justify-between py-3 border-b border-gray-200 dark:border-gray-700">
               <span className="text-gray-600 dark:text-gray-400">Data Plan</span>
               <span className="font-medium text-gray-900 dark:text-white">
-                {selectedPlanData?.label}
+                {selectedPlan?.description}
+              </span>
+            </div>
+            
+            <div className="flex justify-between py-3 border-b border-gray-200 dark:border-gray-700">
+              <span className="text-gray-600 dark:text-gray-400">Data Size</span>
+              <span className="font-medium text-gray-900 dark:text-white">
+                {selectedPlan?.size} ({selectedPlan?.validity})
               </span>
             </div>
             
@@ -389,7 +571,7 @@ const DataServicePage: React.FC = () => {
             <div className="flex justify-between py-3 border-b border-gray-200 dark:border-gray-700">
               <span className="text-gray-600 dark:text-gray-400">Amount</span>
               <span className="font-medium text-gray-900 dark:text-white">
-                {formatCurrency(selectedPlanData?.price || 0)}
+                {formatCurrency(selectedPlan?.selling_price || 0)}
               </span>
             </div>
             
@@ -451,14 +633,14 @@ const DataServicePage: React.FC = () => {
               <div className="flex justify-between py-2">
                 <span className="text-gray-600 dark:text-gray-400">Data Plan</span>
                 <span className="font-medium text-gray-900 dark:text-white">
-                  {selectedPlanData?.label}
+                  {selectedPlan?.description}
                 </span>
               </div>
               
               <div className="flex justify-between py-2">
                 <span className="text-gray-600 dark:text-gray-400">Amount</span>
                 <span className="font-medium text-gray-900 dark:text-white">
-                  {formatCurrency(selectedPlanData?.price || 0)}
+                  {formatCurrency(selectedPlan?.selling_price || 0)}
                 </span>
               </div>
             </div>
@@ -475,8 +657,7 @@ const DataServicePage: React.FC = () => {
               <Button
                 onClick={() => {
                   setStep(1);
-                  setSelectedNetwork('');
-                  setSelectedPlan('');
+                  setSelectedPlan(null);
                   setPhoneNumber('');
                   setSaveAsBeneficiary(false);
                   setIsSuccess(null);

@@ -8,26 +8,6 @@ export const NETWORK_MAPPINGS = {
   '9mobile': 4,
 } as const;
 
-// Data plan mappings (these would need to be updated based on actual API documentation)
-export const DATA_PLAN_MAPPINGS = {
-  'mtn-500mb-30days': 101,
-  'mtn-1gb-30days': 102,
-  'mtn-2gb-30days': 103,
-  'mtn-5gb-30days': 104,
-  'airtel-500mb-30days': 201,
-  'airtel-1gb-30days': 202,
-  'airtel-2gb-30days': 203,
-  'airtel-5gb-30days': 204,
-  'glo-500mb-30days': 301,
-  'glo-1gb-30days': 302,
-  'glo-2gb-30days': 303,
-  'glo-5gb-30days': 304,
-  '9mobile-500mb-30days': 401,
-  '9mobile-1gb-30days': 402,
-  '9mobile-2gb-30days': 403,
-  '9mobile-5gb-30days': 404,
-} as const;
-
 // Disco mappings for electricity
 export const DISCO_MAPPINGS = {
   'ikeja': 'ikeja-electric',
@@ -114,7 +94,7 @@ class MaskawaAPI {
   async buyData(data: {
     network: keyof typeof NETWORK_MAPPINGS;
     mobile_number: string;
-    plan: keyof typeof DATA_PLAN_MAPPINGS;
+    plan: string; // This is now the external_id from data_plans table
     ported_number?: boolean;
   }) {
     return await this.makeEdgeFunctionRequest('buy_data', {

@@ -177,7 +177,7 @@ class ServiceAPI {
       const apiResponse = await maskawaAPI.buyData({
         network: data.network as any,
         mobile_number: data.phoneNumber,
-        plan: data.plan as any,
+        plan: data.plan,
       });
 
       // Update transaction as successful

@@ -30,6 +30,7 @@ import TransactionsManagement from './pages/admin/TransactionsManagement';
 import AdminSettings from './pages/admin/AdminSettings';
 import OrdersManagement from './pages/admin/OrdersManagement';
 import WalletManagement from './pages/admin/WalletManagement';
+import DataPlansManagement from './pages/admin/DataPlansManagement';
 
 import { useAuthStore } from './store/authStore';
 
@@ -52,6 +53,7 @@ function App() {
         <Route path="/admin/orders" element={<OrdersManagement />} />
         <Route path="/admin/wallet" element={<WalletManagement />} />
         <Route path="/admin/settings" element={<AdminSettings />} />
+        <Route path="/admin/data-plans" element={<DataPlansManagement />} />
 
         {/* Coming Soon Route */}
         <Route path="/coming-soon" element={<ComingSoonPage />} />
