@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, User, Search, Filter, Star, Zap, Download, Info } from 'lucide-react';
+import { ArrowLeft, User, Search, Filter, Star, Zap, Download, Info, Plus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import Card from '../../components/ui/Card';
@@ -149,30 +149,53 @@ const DataServicePage: React.FC = () => {
     
     setLoadingBeneficiaries(true);
     try {
-      // In a real app, this would fetch from a beneficiaries table
-      // For now, we'll simulate with mock data
-      const mockBeneficiaries: Beneficiary[] = [
-        { 
-          id: '1', 
-          user_id: user.id, 
-          name: 'John Doe', 
-          phone_number: '08012345678', 
-          network: 'MTN', 
-          type: 'data',
-          created_at: new Date().toISOString()
-        },
-        { 
-          id: '2', 
-          user_id: user.id, 
-          name: 'Jane Smith', 
-          phone_number: '09087654321', 
-          network: 'AIRTEL', 
-          type: 'data',
-          created_at: new Date().toISOString()
-        },
-      ];
-      
-      setBeneficiaries(mockBeneficiaries);
+      // Fetch beneficiaries from the database
+      const { data, error } = await supabase
+        .from('beneficiaries')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('type', 'data')
+        .order('created_at', { ascending: false });
+        
+      if (error) {
+        // If the table doesn't exist yet, we'll use transaction history to extract beneficiaries
+        console.error('Error fetching beneficiaries:', error);
+        
+        // Get data transactions
+        const { data: transactionData, error: txError } = await supabase
+          .from('transactions')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('type', 'data')
+          .eq('status', 'success')
+          .order('created_at', { ascending: false });
+          
+        if (txError) throw txError;
+        
+        // Extract unique beneficiaries from transaction history
+        const beneficiaryMap = new Map<string, Beneficiary>();
+        
+        transactionData?.forEach(transaction => {
+          const phone = transaction.details?.phone;
+          const network = transaction.details?.network;
+          
+          if (phone && network && !beneficiaryMap.has(phone)) {
+            beneficiaryMap.set(phone, {
+              id: transaction.id,
+              user_id: user.id,
+              name: `Beneficiary (${network})`,
+              phone_number: phone,
+              network: network.toUpperCase(),
+              type: 'data',
+              created_at: transaction.created_at
+            });
+          }
+        });
+        
+        setBeneficiaries(Array.from(beneficiaryMap.values()));
+      } else {
+        setBeneficiaries(data || []);
+      }
     } catch (error) {
       console.error('Error fetching beneficiaries:', error);
     } finally {
@@ -227,10 +250,6 @@ const DataServicePage: React.FC = () => {
         throw new Error('Insufficient wallet balance');
       }
 
-      // Deduct from wallet first
-      const newBalance = user.walletBalance - amount;
-      await updateWalletBalance(newBalance);
-
       // Process the data transaction using external_id
       const result = await serviceAPI.processDataTransaction(user.id, {
         network: selectedNetwork.toLowerCase(),
@@ -239,25 +258,24 @@ const DataServicePage: React.FC = () => {
         amount: amount,
       });
       
+      // Deduct from wallet after successful transaction
+      const newBalance = user.walletBalance - amount;
+      await updateWalletBalance(newBalance);
+      
+      setTransaction(result);
+      setIsSuccess(true);
+      
       // Save beneficiary if requested
       if (saveAsBeneficiary && beneficiaryName) {
         await saveBeneficiary();
       }
       
-      setTransaction(result);
-      setIsSuccess(true);
       setStep(3);
     } catch (error: any) {
       console.error('Data purchase error:', error);
       setErrorMessage(error.message || 'Failed to purchase data. Please try again.');
       setIsSuccess(false);
       setStep(3);
-      
-      // If wallet was deducted but transaction failed, we should refund
-      if (user && error.message !== 'Insufficient wallet balance') {
-        // Refund the wallet
-        await updateWalletBalance(user.walletBalance);
-      }
     } finally {
       setIsLoading(false);
     }
@@ -267,14 +285,36 @@ const DataServicePage: React.FC = () => {
     if (!user || !selectedNetwork || !phoneNumber || !beneficiaryName) return;
     
     try {
-      // In a real app, this would save to a beneficiaries table
-      console.log('Saving beneficiary:', {
-        user_id: user.id,
-        name: beneficiaryName,
-        phone_number: phoneNumber,
-        network: selectedNetwork,
-        type: 'data'
-      });
+      // Check if beneficiaries table exists
+      const { error: tableCheckError } = await supabase
+        .from('beneficiaries')
+        .select('id')
+        .limit(1);
+      
+      if (tableCheckError) {
+        // Table doesn't exist, create it
+        const { error: createTableError } = await supabase.rpc('create_beneficiaries_table');
+        if (createTableError) {
+          console.error('Error creating beneficiaries table:', createTableError);
+          return;
+        }
+      }
+      
+      // Insert the beneficiary
+      const { error } = await supabase
+        .from('beneficiaries')
+        .insert([{
+          user_id: user.id,
+          name: beneficiaryName,
+          phone_number: phoneNumber,
+          network: selectedNetwork,
+          type: 'data'
+        }]);
+        
+      if (error) {
+        console.error('Error saving beneficiary:', error);
+        return;
+      }
       
       // Refresh beneficiaries list
       await fetchBeneficiaries();
@@ -429,7 +469,7 @@ const DataServicePage: React.FC = () => {
             International
           </button>
         </div>
-        
+
         {/* Beneficiaries Section */}
         {beneficiaries.length > 0 && (
           <div>
@@ -503,6 +543,23 @@ const DataServicePage: React.FC = () => {
                     <p className="text-xs text-gray-500 dark:text-gray-400">{beneficiary.phone_number}</p>
                   </button>
                 ))}
+                
+                {/* Add New Beneficiary Button */}
+                <button
+                  onClick={() => {
+                    setSelectedNetwork('');
+                    setPhoneNumber('');
+                    setBeneficiaryName('');
+                    setSaveAsBeneficiary(true);
+                  }}
+                  className="flex-shrink-0 flex flex-col items-center p-3 bg-white dark:bg-gray-800 rounded-xl border border-dashed border-gray-300 dark:border-gray-600 hover:border-[#0F9D58] transition-colors"
+                >
+                  <div className="w-12 h-12 rounded-full flex items-center justify-center mb-2 bg-gray-100 dark:bg-gray-700 text-[#0F9D58]">
+                    <Plus size={20} />
+                  </div>
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">Add New</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Beneficiary</p>
+                </button>
               </div>
             )}
           </div>
