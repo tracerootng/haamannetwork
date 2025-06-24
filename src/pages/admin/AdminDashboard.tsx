@@ -26,6 +26,9 @@ type DashboardStats = {
   totalRevenue: number;
   pendingTransactions: number;
   activeUsers: number;
+  newUsersToday: number;
+  newUsersThisWeek: number;
+  newUsersThisMonth: number;
 };
 
 const AdminDashboard: React.FC = () => {
@@ -38,8 +41,13 @@ const AdminDashboard: React.FC = () => {
     totalRevenue: 0,
     pendingTransactions: 0,
     activeUsers: 0,
+    newUsersToday: 0,
+    newUsersThisWeek: 0,
+    newUsersThisMonth: 0
   });
   const [loading, setLoading] = useState(true);
+  const [recentUsers, setRecentUsers] = useState<any[]>([]);
+  const [recentTransactions, setRecentTransactions] = useState<any[]>([]);
 
   useEffect(() => {
     if (!user?.isAdmin) {
@@ -47,6 +55,8 @@ const AdminDashboard: React.FC = () => {
       return;
     }
     fetchDashboardStats();
+    fetchRecentUsers();
+    fetchRecentTransactions();
   }, [user, navigate]);
 
   const fetchDashboardStats = async () => {
@@ -64,7 +74,7 @@ const AdminDashboard: React.FC = () => {
       // Fetch transactions stats
       const { data: transactions } = await supabase
         .from('transactions')
-        .select('amount, status');
+        .select('amount, status, created_at');
 
       const totalTransactions = transactions?.length || 0;
       const totalRevenue = transactions?.reduce((sum, t) => 
@@ -82,6 +92,33 @@ const AdminDashboard: React.FC = () => {
 
       const uniqueActiveUsers = new Set(activeTransactions?.map(t => t.user_id)).size;
 
+      // New users today
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      const { count: newUsersToday } = await supabase
+        .from('profiles')
+        .select('*', { count: 'exact', head: true })
+        .gte('created_at', today.toISOString());
+
+      // New users this week
+      const oneWeekAgo = new Date();
+      oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+      
+      const { count: newUsersThisWeek } = await supabase
+        .from('profiles')
+        .select('*', { count: 'exact', head: true })
+        .gte('created_at', oneWeekAgo.toISOString());
+
+      // New users this month
+      const oneMonthAgo = new Date();
+      oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+      
+      const { count: newUsersThisMonth } = await supabase
+        .from('profiles')
+        .select('*', { count: 'exact', head: true })
+        .gte('created_at', oneMonthAgo.toISOString());
+
       setStats({
         totalUsers: usersCount || 0,
         totalProducts: productsCount || 0,
@@ -89,11 +126,73 @@ const AdminDashboard: React.FC = () => {
         totalRevenue,
         pendingTransactions,
         activeUsers: uniqueActiveUsers,
+        newUsersToday: newUsersToday || 0,
+        newUsersThisWeek: newUsersThisWeek || 0,
+        newUsersThisMonth: newUsersThisMonth || 0
       });
     } catch (error) {
       console.error('Error fetching dashboard stats:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchRecentUsers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, name, email, created_at, referred_by')
+        .order('created_at', { ascending: false })
+        .limit(5);
+
+      if (error) throw error;
+      
+      // Get referrer names for users who were referred
+      const usersWithReferrers = await Promise.all(
+        (data || []).map(async (user) => {
+          if (user.referred_by) {
+            const { data: referrer } = await supabase
+              .from('profiles')
+              .select('name')
+              .eq('id', user.referred_by)
+              .single();
+            
+            return {
+              ...user,
+              referrer_name: referrer?.name || 'Unknown'
+            };
+          }
+          return {
+            ...user,
+            referrer_name: null
+          };
+        })
+      );
+      
+      setRecentUsers(usersWithReferrers);
+    } catch (error) {
+      console.error('Error fetching recent users:', error);
+    }
+  };
+
+  const fetchRecentTransactions = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('transactions')
+        .select(`
+          *,
+          profiles!transactions_user_id_fkey (
+            name,
+            email
+          )
+        `)
+        .order('created_at', { ascending: false })
+        .limit(5);
+
+      if (error) throw error;
+      setRecentTransactions(data || []);
+    } catch (error) {
+      console.error('Error fetching recent transactions:', error);
     }
   };
 
@@ -160,7 +259,8 @@ const AdminDashboard: React.FC = () => {
       value: stats.totalUsers.toLocaleString(),
       icon: Users,
       color: 'bg-blue-500',
-      change: '+12%',
+      change: `+${stats.newUsersThisMonth}`,
+      period: 'this month'
     },
     {
       title: 'Total Products',
@@ -239,7 +339,9 @@ const AdminDashboard: React.FC = () => {
                 <div>
                   <p className="text-sm font-medium text-gray-600 dark:text-gray-400">{stat.title}</p>
                   <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">{stat.value}</p>
-                  <p className="text-sm text-green-600 mt-1">{stat.change} from last month</p>
+                  {stat.change && (
+                    <p className="text-sm text-green-600 mt-1">{stat.change} {stat.period || 'from last month'}</p>
+                  )}
                 </div>
                 <div className={`w-12 h-12 ${stat.color} rounded-lg flex items-center justify-center`}>
                   <stat.icon className="text-white" size={24} />
@@ -247,6 +349,39 @@ const AdminDashboard: React.FC = () => {
               </div>
             </div>
           ))}
+        </div>
+
+        {/* User Growth Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 border border-gray-200 dark:border-gray-700">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">New Users Today</h3>
+              <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center">
+                <Users className="text-blue-500" size={20} />
+              </div>
+            </div>
+            <p className="text-3xl font-bold text-gray-900 dark:text-white">{stats.newUsersToday}</p>
+          </div>
+          
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 border border-gray-200 dark:border-gray-700">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">New Users This Week</h3>
+              <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">
+                <Users className="text-green-500" size={20} />
+              </div>
+            </div>
+            <p className="text-3xl font-bold text-gray-900 dark:text-white">{stats.newUsersThisWeek}</p>
+          </div>
+          
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 border border-gray-200 dark:border-gray-700">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">New Users This Month</h3>
+              <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-full flex items-center justify-center">
+                <Users className="text-purple-500" size={20} />
+              </div>
+            </div>
+            <p className="text-3xl font-bold text-gray-900 dark:text-white">{stats.newUsersThisMonth}</p>
+          </div>
         </div>
 
         {/* Quick Actions */}
@@ -268,57 +403,115 @@ const AdminDashboard: React.FC = () => {
 
         {/* Recent Activity */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Pending Transactions */}
+          {/* Recent Users */}
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
             <div className="p-6 border-b border-gray-200 dark:border-gray-700">
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Pending Transactions</h3>
-                <span className="bg-yellow-100 text-yellow-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
-                  {stats.pendingTransactions}
-                </span>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Recent Users</h3>
+                <button
+                  onClick={() => navigate('/admin/users')}
+                  className="text-sm text-[#0F9D58] hover:underline"
+                >
+                  View All
+                </button>
               </div>
             </div>
             <div className="p-6">
-              {stats.pendingTransactions > 0 ? (
-                <div className="text-center">
-                  <p className="text-gray-600 dark:text-gray-400 mb-4">
-                    {stats.pendingTransactions} transactions need attention
-                  </p>
-                  <button
-                    onClick={() => navigate('/admin/transactions')}
-                    className="bg-[#0F9D58] text-white px-4 py-2 rounded-lg hover:bg-[#0d8a4f] transition-colors"
-                  >
-                    Review Transactions
-                  </button>
+              {recentUsers.length > 0 ? (
+                <div className="space-y-4">
+                  {recentUsers.map((user) => (
+                    <div key={user.id} className="flex items-center justify-between">
+                      <div className="flex items-center">
+                        <div className="w-10 h-10 bg-gradient-to-br from-[#0F9D58] to-[#0d8a4f] rounded-full flex items-center justify-center">
+                          <span className="text-white font-bold text-sm">
+                            {user.name.charAt(0).toUpperCase()}
+                          </span>
+                        </div>
+                        <div className="ml-3">
+                          <p className="text-sm font-medium text-gray-900 dark:text-white">{user.name}</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">{user.email}</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          {new Date(user.created_at).toLocaleDateString()}
+                        </p>
+                        {user.referred_by && (
+                          <p className="text-xs text-[#0F9D58]">
+                            Referred by: {user.referrer_name}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               ) : (
-                <p className="text-gray-600 dark:text-gray-400 text-center">No pending transactions</p>
+                <p className="text-gray-600 dark:text-gray-400 text-center">No recent users</p>
               )}
             </div>
           </div>
 
-          {/* Quick Stats */}
+          {/* Recent Transactions */}
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
             <div className="p-6 border-b border-gray-200 dark:border-gray-700">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">System Overview</h3>
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Recent Transactions</h3>
+                <button
+                  onClick={() => navigate('/admin/transactions')}
+                  className="text-sm text-[#0F9D58] hover:underline"
+                >
+                  View All
+                </button>
+              </div>
             </div>
-            <div className="p-6 space-y-4">
-              <div className="flex justify-between items-center">
-                <span className="text-gray-600 dark:text-gray-400">Total Transactions</span>
-                <span className="font-semibold text-gray-900 dark:text-white">{stats.totalTransactions}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-600 dark:text-gray-400">Success Rate</span>
-                <span className="font-semibold text-green-600">
-                  {stats.totalTransactions > 0 
-                    ? Math.round(((stats.totalTransactions - stats.pendingTransactions) / stats.totalTransactions) * 100)
-                    : 0}%
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-600 dark:text-gray-400">Active Users (30d)</span>
-                <span className="font-semibold text-gray-900 dark:text-white">{stats.activeUsers}</span>
-              </div>
+            <div className="p-6">
+              {recentTransactions.length > 0 ? (
+                <div className="space-y-4">
+                  {recentTransactions.map((transaction) => (
+                    <div key={transaction.id} className="flex items-center justify-between">
+                      <div className="flex items-center">
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                          transaction.type === 'wallet_funding' 
+                            ? 'bg-green-100 dark:bg-green-900/30' 
+                            : 'bg-blue-100 dark:bg-blue-900/30'
+                        }`}>
+                          <span className={`${
+                            transaction.type === 'wallet_funding' 
+                              ? 'text-green-500' 
+                              : 'text-blue-500'
+                          }`}>
+                            {transaction.type === 'wallet_funding' ? <Plus size={18} /> : <CreditCard size={18} />}
+                          </span>
+                        </div>
+                        <div className="ml-3">
+                          <p className="text-sm font-medium text-gray-900 dark:text-white">
+                            {transaction.type.replace('_', ' ').toUpperCase()}
+                          </p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            {transaction.profiles?.name || 'Unknown user'}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-medium text-gray-900 dark:text-white">
+                          {formatCurrency(transaction.amount)}
+                        </p>
+                        <p className={`text-xs ${
+                          transaction.status === 'success' 
+                            ? 'text-green-500' 
+                            : transaction.status === 'pending' 
+                            ? 'text-yellow-500' 
+                            : 'text-red-500'
+                        }`}>
+                          {transaction.status.toUpperCase()}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-gray-600 dark:text-gray-400 text-center">No recent transactions</p>
+              )}
             </div>
           </div>
         </div>

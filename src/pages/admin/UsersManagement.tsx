@@ -29,6 +29,7 @@ type User = {
   total_referrals: number;
   referral_earnings: number;
   created_at: string;
+  referrer_name?: string;
 };
 
 const UsersManagement: React.FC = () => {
@@ -50,13 +51,30 @@ const UsersManagement: React.FC = () => {
 
   const fetchUsers = async () => {
     try {
+      // First get all users with their basic info
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setUsers(data || []);
+      
+      // Create a map to store referrer names
+      const userMap = new Map();
+      data?.forEach(user => {
+        userMap.set(user.id, user);
+      });
+      
+      // Add referrer names to users
+      const usersWithReferrers = data?.map(user => {
+        const referrer = user.referred_by ? userMap.get(user.referred_by) : null;
+        return {
+          ...user,
+          referrer_name: referrer ? referrer.name : null
+        };
+      }) || [];
+      
+      setUsers(usersWithReferrers);
     } catch (error) {
       console.error('Error fetching users:', error);
     } finally {
@@ -96,7 +114,8 @@ const UsersManagement: React.FC = () => {
   const filteredUsers = users.filter(user => 
     user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    user.phone?.toLowerCase().includes(searchQuery.toLowerCase())
+    user.phone?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    user.referral_code?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const totalUsers = users.length;
@@ -189,7 +208,7 @@ const UsersManagement: React.FC = () => {
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
               <input
                 type="text"
-                placeholder="Search users by name, email, or phone..."
+                placeholder="Search users by name, email, phone, or referral code..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0F9D58]"
@@ -219,6 +238,9 @@ const UsersManagement: React.FC = () => {
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     Referrals
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Referred By
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     Status
@@ -267,6 +289,16 @@ const UsersManagement: React.FC = () => {
                       <div className="text-sm text-gray-500 dark:text-gray-400">
                         {formatCurrency(user.referral_earnings)} earned
                       </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900 dark:text-white">
+                        {user.referrer_name || 'None'}
+                      </div>
+                      {user.referred_by && (
+                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                          ID: {user.referred_by.slice(0, 6)}...
+                        </div>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
@@ -388,6 +420,17 @@ const UsersManagement: React.FC = () => {
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Total Referrals</label>
                     <p className="text-gray-900 dark:text-white">{selectedUser.total_referrals}</p>
+                  </div>
+                  <div className="col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Referred By</label>
+                    <p className="text-gray-900 dark:text-white">
+                      {selectedUser.referrer_name ? selectedUser.referrer_name : 'Not referred by anyone'}
+                    </p>
+                    {selectedUser.referred_by && (
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        ID: {selectedUser.referred_by}
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
