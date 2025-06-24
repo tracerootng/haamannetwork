@@ -140,17 +140,13 @@ export const useAuthStore = create<AuthState>()(
             // Check if referral code exists and is valid
             let referrerProfile = null;
             if (referralCode) {
-              const { data: referrer, error: referrerError } = await supabase
+              const { data: referrer } = await supabase
                 .from('profiles')
                 .select('*')
                 .eq('referral_code', referralCode)
                 .single();
               
-              if (referrerError) {
-                console.error('Error finding referrer:', referrerError);
-              } else {
-                referrerProfile = referrer;
-              }
+              referrerProfile = referrer;
             }
 
             // Create user profile
@@ -176,27 +172,12 @@ export const useAuthStore = create<AuthState>()(
 
             // Update referrer's total referrals count
             if (referrerProfile) {
-              const newTotalReferrals = (referrerProfile.total_referrals || 0) + 1;
-              
               await supabase
                 .from('profiles')
                 .update({ 
-                  total_referrals: newTotalReferrals
+                  total_referrals: (referrerProfile.total_referrals || 0) + 1 
                 })
                 .eq('id', referrerProfile.id);
-                
-              // Log the referral
-              await supabase.from('admin_logs').insert([{
-                admin_id: null,
-                action: 'new_referral',
-                details: { 
-                  referrer_id: referrerProfile.id,
-                  referrer_name: referrerProfile.name,
-                  referred_user_id: data.user.id,
-                  referred_user_name: name,
-                  referral_code: referralCode
-                },
-              }]);
             }
 
             set({
