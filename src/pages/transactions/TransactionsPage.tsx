@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowUpRight, ArrowDownRight, Download, Search, Filter, BarChart2, Trophy, Users, Calendar, ChevronDown, ChevronUp } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, Download, Search, Filter, BarChart2, Trophy, Users, Calendar, ChevronDown, ChevronUp, Crown } from 'lucide-react';
 import Card from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
@@ -30,12 +30,18 @@ type TransactionStats = {
     [key: string]: {
       count: number;
       amount: number;
+      percentage: number;
     }
   };
   timeBreakdown: {
     daily: number;
     weekly: number;
     monthly: number;
+  };
+  mostUsedService: {
+    type: string;
+    count: number;
+    amount: number;
   };
 };
 
@@ -45,14 +51,17 @@ type LeaderboardEntry = {
   network: string;
   total_amount: number;
   rank: number;
+  is_current_user: boolean;
 };
 
 type Beneficiary = {
   id: string;
+  user_id: string;
   name: string;
-  phoneNumber: string;
+  phone_number: string;
   network: string;
   type: 'airtime' | 'data';
+  created_at: string;
 };
 
 const transactionTypes = [
@@ -98,7 +107,7 @@ const getTransactionLabel = (type: string, details: any) => {
     case 'waec':
       return 'WAEC Card';
     case 'wallet_funding':
-      return `Wallet Funding (${details.method})`;
+      return `Wallet Funding (${details.method || 'wallet'})`;
     case 'product_purchase':
       return `Product Purchase - ${details.product_name || 'Product'}`;
     default:
@@ -149,7 +158,7 @@ const downloadReceipt = (transaction: any) => {
     doc.setFont('helvetica', 'bold');
     doc.text(label, 40, startY + (lineHeight * index));
     doc.setFont('helvetica', 'normal');
-    doc.text(value, 80, startY + (lineHeight * index));
+    doc.text(String(value), 80, startY + (lineHeight * index));
   });
   
   // Footer
@@ -184,12 +193,18 @@ const TransactionsPage: React.FC = () => {
       daily: 0,
       weekly: 0,
       monthly: 0
+    },
+    mostUsedService: {
+      type: '',
+      count: 0,
+      amount: 0
     }
   });
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [beneficiaries, setBeneficiaries] = useState<Beneficiary[]>([]);
   const [loadingStats, setLoadingStats] = useState(false);
   const [loadingLeaderboard, setLoadingLeaderboard] = useState(false);
+  const [loadingBeneficiaries, setLoadingBeneficiaries] = useState(false);
 
   useEffect(() => {
     if (isAuthenticated && user) {
@@ -197,6 +212,12 @@ const TransactionsPage: React.FC = () => {
       fetchBeneficiaries();
     }
   }, [isAuthenticated, user]);
+
+  useEffect(() => {
+    if (showLeaderboard && !leaderboard.length) {
+      fetchLeaderboard();
+    }
+  }, [showLeaderboard]);
 
   const fetchTransactions = async () => {
     if (!user) return;
@@ -221,15 +242,48 @@ const TransactionsPage: React.FC = () => {
   };
   
   const fetchBeneficiaries = async () => {
-    // In a real app, this would fetch from a beneficiaries table
-    // For now, we'll simulate with mock data
-    const mockBeneficiaries: Beneficiary[] = [
-      { id: '1', name: 'John Doe', phoneNumber: '08012345678', network: 'mtn', type: 'airtime' },
-      { id: '2', name: 'Jane Smith', phoneNumber: '09087654321', network: 'airtel', type: 'data' },
-      { id: '3', name: 'Mike Johnson', phoneNumber: '08123456789', network: 'glo', type: 'airtime' },
-    ];
+    if (!user) return;
     
-    setBeneficiaries(mockBeneficiaries);
+    setLoadingBeneficiaries(true);
+    try {
+      // In a real implementation, we would fetch from a beneficiaries table
+      // For now, we'll create a query to extract beneficiaries from transaction history
+      const { data: transactionData, error } = await supabase
+        .from('transactions')
+        .select('*')
+        .eq('user_id', user.id)
+        .in('type', ['airtime', 'data'])
+        .eq('status', 'success')
+        .order('created_at', { ascending: false });
+        
+      if (error) throw error;
+      
+      // Extract unique beneficiaries from transaction history
+      const beneficiaryMap = new Map<string, Beneficiary>();
+      
+      transactionData?.forEach(transaction => {
+        const phone = transaction.details?.phone;
+        const network = transaction.details?.network;
+        
+        if (phone && network && !beneficiaryMap.has(phone)) {
+          beneficiaryMap.set(phone, {
+            id: transaction.id,
+            user_id: user.id,
+            name: `Beneficiary (${network})`,
+            phone_number: phone,
+            network: network,
+            type: transaction.type as 'airtime' | 'data',
+            created_at: transaction.created_at
+          });
+        }
+      });
+      
+      setBeneficiaries(Array.from(beneficiaryMap.values()));
+    } catch (error) {
+      console.error('Error fetching beneficiaries:', error);
+    } finally {
+      setLoadingBeneficiaries(false);
+    }
   };
   
   const calculateStats = (transactionData: Transaction[]) => {
@@ -243,15 +297,22 @@ const TransactionsPage: React.FC = () => {
     const totalSpent = serviceTransactions.reduce((sum, t) => sum + Number(t.amount), 0);
     
     // Network breakdown
-    const networkBreakdown: {[key: string]: {count: number, amount: number}} = {};
+    const networkBreakdown: {[key: string]: {count: number, amount: number, percentage: number}} = {};
     
     serviceTransactions.forEach(t => {
       const network = t.details?.network?.toLowerCase() || 'unknown';
       if (!networkBreakdown[network]) {
-        networkBreakdown[network] = { count: 0, amount: 0 };
+        networkBreakdown[network] = { count: 0, amount: 0, percentage: 0 };
       }
       networkBreakdown[network].count += 1;
       networkBreakdown[network].amount += Number(t.amount);
+    });
+    
+    // Calculate percentages
+    Object.keys(networkBreakdown).forEach(network => {
+      networkBreakdown[network].percentage = totalSpent > 0 
+        ? (networkBreakdown[network].amount / totalSpent) * 100 
+        : 0;
     });
     
     // Time-based calculations
@@ -269,9 +330,26 @@ const TransactionsPage: React.FC = () => {
     const monthlyTotal = monthlyTransactions.reduce((sum, t) => sum + Number(t.amount), 0);
     
     // Calculate averages
-    const dailyAverage = serviceTransactions.length > 0 ? totalSpent / (serviceTransactions.length / (serviceTransactions.length / 30)) : 0;
-    const weeklyAverage = serviceTransactions.length > 0 ? totalSpent / (serviceTransactions.length / (serviceTransactions.length / 4)) : 0;
-    const monthlyAverage = serviceTransactions.length > 0 ? totalSpent / (serviceTransactions.length / (serviceTransactions.length / 1)) : 0;
+    const dailyAverage = dailyTransactions.length > 0 ? dailyTotal / dailyTransactions.length : 0;
+    const weeklyAverage = weeklyTransactions.length > 0 ? weeklyTotal / 7 : 0;
+    const monthlyAverage = monthlyTransactions.length > 0 ? monthlyTotal / 30 : 0;
+    
+    // Find most used service
+    const serviceTypeCounts: {[key: string]: {count: number, amount: number}} = {};
+    serviceTransactions.forEach(t => {
+      if (!serviceTypeCounts[t.type]) {
+        serviceTypeCounts[t.type] = { count: 0, amount: 0 };
+      }
+      serviceTypeCounts[t.type].count += 1;
+      serviceTypeCounts[t.type].amount += Number(t.amount);
+    });
+    
+    let mostUsedService = { type: '', count: 0, amount: 0 };
+    Object.entries(serviceTypeCounts).forEach(([type, data]) => {
+      if (data.count > mostUsedService.count) {
+        mostUsedService = { type, count: data.count, amount: data.amount };
+      }
+    });
     
     setTransactionStats({
       totalSpent,
@@ -283,39 +361,83 @@ const TransactionsPage: React.FC = () => {
         daily: dailyTotal,
         weekly: weeklyTotal,
         monthly: monthlyTotal
-      }
+      },
+      mostUsedService
     });
   };
   
   const fetchLeaderboard = async () => {
+    if (!user) return;
+    
     setLoadingLeaderboard(true);
     try {
-      // In a real app, this would be a database query
-      // For now, we'll simulate with mock data
-      const mockLeaderboard: LeaderboardEntry[] = [
-        { user_id: '1', name: 'John D.', network: 'mtn', total_amount: 25000, rank: 1 },
-        { user_id: '2', name: 'Sarah M.', network: 'airtel', total_amount: 18500, rank: 2 },
-        { user_id: '3', name: 'Michael T.', network: 'glo', total_amount: 15200, rank: 3 },
-        { user_id: '4', name: 'Emma R.', network: 'mtn', total_amount: 12800, rank: 4 },
-        { user_id: '5', name: 'David K.', network: '9mobile', total_amount: 10500, rank: 5 },
-      ];
-      
-      // Add current user if they're in the top users
-      const currentUserRank = Math.floor(Math.random() * 20) + 1; // Random rank for demo
-      if (currentUserRank <= 10) {
-        mockLeaderboard.push({
-          user_id: user?.id || '',
-          name: `${user?.name} (You)`,
-          network: 'mtn',
-          total_amount: Math.floor(Math.random() * 10000) + 5000,
-          rank: currentUserRank
-        });
+      // Fetch all users with their transaction data
+      const { data: profiles, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, name')
+        .order('created_at', { ascending: false })
+        .limit(50);  // Limit to a reasonable number
         
-        // Sort by rank
-        mockLeaderboard.sort((a, b) => a.rank - b.rank);
+      if (profilesError) throw profilesError;
+      
+      // For each user, calculate their total data spending
+      const leaderboardData: LeaderboardEntry[] = [];
+      
+      for (const profile of profiles || []) {
+        // Get data transactions for this user
+        const { data: transactions, error: txError } = await supabase
+          .from('transactions')
+          .select('amount, details')
+          .eq('user_id', profile.id)
+          .eq('type', 'data')
+          .eq('status', 'success');
+          
+        if (txError) continue; // Skip this user if there's an error
+        
+        // Calculate total amount spent on data
+        const totalAmount = transactions?.reduce((sum, tx) => sum + Number(tx.amount), 0) || 0;
+        
+        // Only include users who have spent money on data
+        if (totalAmount > 0) {
+          // Determine the most used network
+          const networkCounts: {[key: string]: number} = {};
+          transactions?.forEach(tx => {
+            const network = tx.details?.network?.toLowerCase() || 'unknown';
+            networkCounts[network] = (networkCounts[network] || 0) + 1;
+          });
+          
+          let mostUsedNetwork = 'unknown';
+          let maxCount = 0;
+          Object.entries(networkCounts).forEach(([network, count]) => {
+            if (count > maxCount) {
+              mostUsedNetwork = network;
+              maxCount = count;
+            }
+          });
+          
+          // Add to leaderboard
+          leaderboardData.push({
+            user_id: profile.id,
+            // Mask the name for privacy, except for current user
+            name: profile.id === user.id 
+              ? `${profile.name} (You)` 
+              : `${profile.name.split(' ')[0]} ${profile.name.split(' ')[1]?.charAt(0) || ''}`,
+            network: mostUsedNetwork,
+            total_amount: totalAmount,
+            rank: 0, // Will be set after sorting
+            is_current_user: profile.id === user.id
+          });
+        }
       }
       
-      setLeaderboard(mockLeaderboard);
+      // Sort by total amount and assign ranks
+      leaderboardData.sort((a, b) => b.total_amount - a.total_amount);
+      leaderboardData.forEach((entry, index) => {
+        entry.rank = index + 1;
+      });
+      
+      // Take top 5
+      setLeaderboard(leaderboardData.slice(0, 5));
     } catch (error) {
       console.error('Error fetching leaderboard:', error);
     } finally {
@@ -469,17 +591,17 @@ const TransactionsPage: React.FC = () => {
                 
                 <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3 text-center">
                   <p className="text-sm text-gray-500 dark:text-gray-400">Daily Avg</p>
-                  <p className="text-lg font-bold text-[#0F9D58]">{formatCurrency(transactionStats.timeBreakdown.daily)}</p>
+                  <p className="text-lg font-bold text-[#0F9D58]">{formatCurrency(transactionStats.dailyAverage)}</p>
                 </div>
                 
                 <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3 text-center">
                   <p className="text-sm text-gray-500 dark:text-gray-400">Weekly Avg</p>
-                  <p className="text-lg font-bold text-[#0F9D58]">{formatCurrency(transactionStats.timeBreakdown.weekly / 7)}</p>
+                  <p className="text-lg font-bold text-[#0F9D58]">{formatCurrency(transactionStats.weeklyAverage)}</p>
                 </div>
                 
                 <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3 text-center">
                   <p className="text-sm text-gray-500 dark:text-gray-400">Monthly Avg</p>
-                  <p className="text-lg font-bold text-[#0F9D58]">{formatCurrency(transactionStats.timeBreakdown.monthly / 30)}</p>
+                  <p className="text-lg font-bold text-[#0F9D58]">{formatCurrency(transactionStats.monthlyAverage)}</p>
                 </div>
               </div>
               
@@ -511,13 +633,13 @@ const TransactionsPage: React.FC = () => {
                           'bg-gray-500'
                         }`}
                         style={{ 
-                          width: `${Math.min(100, (data.amount / transactionStats.totalSpent) * 100)}%` 
+                          width: `${Math.min(100, data.percentage)}%` 
                         }}
                       ></div>
                     </div>
                     <div className="flex justify-between items-center mt-1">
                       <span className="text-xs text-gray-500 dark:text-gray-400">
-                        {((data.amount / transactionStats.totalSpent) * 100).toFixed(1)}% of total
+                        {data.percentage.toFixed(1)}% of total
                       </span>
                       <span className="text-sm font-medium">{formatCurrency(data.amount)}</span>
                     </div>
@@ -532,19 +654,30 @@ const TransactionsPage: React.FC = () => {
               </div>
               
               {/* Most Frequent Transactions */}
-              <h3 className="text-md font-semibold mb-3">Most Frequent Transactions</h3>
-              <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="font-medium">Data Bundles</span>
-                  <Badge variant="success">Most Used</Badge>
+              {transactionStats.mostUsedService.type && (
+                <div>
+                  <h3 className="text-md font-semibold mb-3">Most Frequent Transactions</h3>
+                  <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-medium capitalize">
+                        {transactionStats.mostUsedService.type.replace('_', ' ')}
+                      </span>
+                      <Badge variant="success">Most Used</Badge>
+                    </div>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">
+                      You use {transactionStats.mostUsedService.type.replace('_', ' ')} more frequently than any other service.
+                    </p>
+                    <div className="flex justify-between mt-2">
+                      <p className="text-sm">
+                        <span className="font-medium">{transactionStats.mostUsedService.count}</span> transactions
+                      </p>
+                      <p className="text-sm font-medium text-[#0F9D58]">
+                        {formatCurrency(transactionStats.mostUsedService.amount)}
+                      </p>
+                    </div>
+                  </div>
                 </div>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">
-                  You purchase data bundles more frequently than any other service.
-                </p>
-                <p className="text-sm">
-                  <span className="font-medium">Favorite Plan:</span> MTN 1GB SME2 - 30 days
-                </p>
-              </div>
+              )}
             </>
           )}
         </Card>
@@ -588,7 +721,7 @@ const TransactionsPage: React.FC = () => {
                   {/* Crown for top user */}
                   {index === 0 && (
                     <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
-                      <div className="text-yellow-500 text-2xl">👑</div>
+                      <Crown className="text-yellow-500" size={24} />
                     </div>
                   )}
                   
@@ -607,7 +740,7 @@ const TransactionsPage: React.FC = () => {
                         <p className="font-medium text-gray-900 dark:text-white">
                           {entry.name}
                         </p>
-                        {entry.name.includes('(You)') && (
+                        {entry.is_current_user && (
                           <Badge variant="success" className="ml-2 text-xs">You</Badge>
                         )}
                       </div>
@@ -642,7 +775,7 @@ const TransactionsPage: React.FC = () => {
                   <Trophy className="text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" size={16} />
                   <div className="ml-3">
                     <p className="text-sm text-blue-800 dark:text-blue-200">
-                      The leaderboard shows the top users based on their total spending on data bundles. 
+                      The leaderboard shows the top 5 users based on their total spending on data bundles. 
                       Privacy is important to us, so only partial names are displayed.
                     </p>
                   </div>
@@ -665,13 +798,18 @@ const TransactionsPage: React.FC = () => {
               variant="outline" 
               size="sm"
               className="text-xs"
+              onClick={() => navigate('/services/airtime')}
               icon={<Calendar size={14} />}
             >
               Add New
             </Button>
           </div>
           
-          {beneficiaries.length > 0 ? (
+          {loadingBeneficiaries ? (
+            <div className="flex justify-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#0F9D58]"></div>
+            </div>
+          ) : beneficiaries.length > 0 ? (
             <div className="space-y-3">
               {beneficiaries.map((beneficiary) => (
                 <div key={beneficiary.id} className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 flex items-center justify-between">
@@ -689,7 +827,7 @@ const TransactionsPage: React.FC = () => {
                     <div className="ml-3">
                       <p className="font-medium text-gray-900 dark:text-white">{beneficiary.name}</p>
                       <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
-                        <span>{beneficiary.phoneNumber}</span>
+                        <span>{beneficiary.phone_number}</span>
                         <span className="mx-1">•</span>
                         <span className="capitalize">{beneficiary.network}</span>
                         <Badge 
@@ -703,7 +841,18 @@ const TransactionsPage: React.FC = () => {
                   </div>
                   
                   <div className="flex space-x-2">
-                    <Button variant="outline" size="sm" className="text-xs px-2 py-1">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="text-xs px-2 py-1"
+                      onClick={() => {
+                        if (beneficiary.type === 'airtime') {
+                          navigate('/services/airtime');
+                        } else {
+                          navigate('/services/data');
+                        }
+                      }}
+                    >
                       Use
                     </Button>
                     <Button variant="outline" size="sm" className="text-xs px-2 py-1 text-red-500 border-red-200">
@@ -720,7 +869,11 @@ const TransactionsPage: React.FC = () => {
               <p className="text-gray-600 dark:text-gray-400 mb-4">
                 Save your frequent contacts for quick transactions
               </p>
-              <Button variant="primary" size="sm">
+              <Button 
+                variant="primary" 
+                size="sm"
+                onClick={() => navigate('/services/airtime')}
+              >
                 Add Beneficiary
               </Button>
             </div>

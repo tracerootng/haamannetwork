@@ -5,6 +5,7 @@ import { useAuthStore } from '../../store/authStore';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
+import { supabase } from '../../lib/supabase';
 
 const LoginPage: React.FC = () => {
   const navigate = useNavigate();

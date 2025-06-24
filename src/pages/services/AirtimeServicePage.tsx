@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Phone, CheckCircle, XCircle, User } from 'lucide-react';
+import { ArrowLeft, Phone, CheckCircle, XCircle, User, Plus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
@@ -74,30 +74,53 @@ const AirtimeServicePage: React.FC = () => {
     
     setLoadingBeneficiaries(true);
     try {
-      // In a real app, this would fetch from a beneficiaries table
-      // For now, we'll simulate with mock data
-      const mockBeneficiaries: Beneficiary[] = [
-        { 
-          id: '1', 
-          user_id: user.id, 
-          name: 'John Doe', 
-          phone_number: '08012345678', 
-          network: 'mtn', 
-          type: 'airtime',
-          created_at: new Date().toISOString()
-        },
-        { 
-          id: '2', 
-          user_id: user.id, 
-          name: 'Jane Smith', 
-          phone_number: '09087654321', 
-          network: 'airtel', 
-          type: 'airtime',
-          created_at: new Date().toISOString()
-        },
-      ];
-      
-      setBeneficiaries(mockBeneficiaries);
+      // Fetch beneficiaries from the database
+      const { data, error } = await supabase
+        .from('beneficiaries')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('type', 'airtime')
+        .order('created_at', { ascending: false });
+        
+      if (error) {
+        // If the table doesn't exist yet, we'll use transaction history to extract beneficiaries
+        console.error('Error fetching beneficiaries:', error);
+        
+        // Get airtime transactions
+        const { data: transactionData, error: txError } = await supabase
+          .from('transactions')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('type', 'airtime')
+          .eq('status', 'success')
+          .order('created_at', { ascending: false });
+          
+        if (txError) throw txError;
+        
+        // Extract unique beneficiaries from transaction history
+        const beneficiaryMap = new Map<string, Beneficiary>();
+        
+        transactionData?.forEach(transaction => {
+          const phone = transaction.details?.phone;
+          const network = transaction.details?.network;
+          
+          if (phone && network && !beneficiaryMap.has(phone)) {
+            beneficiaryMap.set(phone, {
+              id: transaction.id,
+              user_id: user.id,
+              name: `Beneficiary (${network})`,
+              phone_number: phone,
+              network: network,
+              type: 'airtime',
+              created_at: transaction.created_at
+            });
+          }
+        });
+        
+        setBeneficiaries(Array.from(beneficiaryMap.values()));
+      } else {
+        setBeneficiaries(data || []);
+      }
     } catch (error) {
       console.error('Error fetching beneficiaries:', error);
     } finally {
@@ -180,14 +203,36 @@ const AirtimeServicePage: React.FC = () => {
     if (!user || !selectedNetwork || !phoneNumber || !beneficiaryName) return;
     
     try {
-      // In a real app, this would save to a beneficiaries table
-      console.log('Saving beneficiary:', {
-        user_id: user.id,
-        name: beneficiaryName,
-        phone_number: phoneNumber,
-        network: selectedNetwork,
-        type: 'airtime'
-      });
+      // Check if beneficiaries table exists
+      const { error: tableCheckError } = await supabase
+        .from('beneficiaries')
+        .select('id')
+        .limit(1);
+      
+      if (tableCheckError) {
+        // Table doesn't exist, create it
+        const { error: createTableError } = await supabase.rpc('create_beneficiaries_table');
+        if (createTableError) {
+          console.error('Error creating beneficiaries table:', createTableError);
+          return;
+        }
+      }
+      
+      // Insert the beneficiary
+      const { error } = await supabase
+        .from('beneficiaries')
+        .insert([{
+          user_id: user.id,
+          name: beneficiaryName,
+          phone_number: phoneNumber,
+          network: selectedNetwork,
+          type: 'airtime'
+        }]);
+        
+      if (error) {
+        console.error('Error saving beneficiary:', error);
+        return;
+      }
       
       // Refresh beneficiaries list
       await fetchBeneficiaries();
@@ -294,7 +339,7 @@ const AirtimeServicePage: React.FC = () => {
             International
           </button>
         </div>
-
+        
         {/* Beneficiaries Section */}
         {beneficiaries.length > 0 && (
           <div>
@@ -368,6 +413,23 @@ const AirtimeServicePage: React.FC = () => {
                     <p className="text-xs text-gray-500 dark:text-gray-400">{beneficiary.phone_number}</p>
                   </button>
                 ))}
+                
+                {/* Add New Beneficiary Button */}
+                <button
+                  onClick={() => {
+                    setSelectedNetwork('');
+                    setPhoneNumber('');
+                    setBeneficiaryName('');
+                    setSaveAsBeneficiary(true);
+                  }}
+                  className="flex-shrink-0 flex flex-col items-center p-3 bg-white dark:bg-gray-800 rounded-xl border border-dashed border-gray-300 dark:border-gray-600 hover:border-[#0F9D58] transition-colors"
+                >
+                  <div className="w-12 h-12 rounded-full flex items-center justify-center mb-2 bg-gray-100 dark:bg-gray-700 text-[#0F9D58]">
+                    <Plus size={20} />
+                  </div>
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">Add New</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Beneficiary</p>
+                </button>
               </div>
             )}
           </div>
@@ -527,17 +589,17 @@ const AirtimeServicePage: React.FC = () => {
               <span className="font-medium text-gray-900 dark:text-white">{phoneNumber}</span>
             </div>
             
-            <div className="flex justify-between py-3 border-b border-gray-200 dark:border-gray-700">
-              <span className="text-gray-600 dark:text-gray-400">Amount</span>
-              <span className="font-medium text-gray-900 dark:text-white">{formatCurrency(Number(amount))}</span>
-            </div>
-            
             {saveAsBeneficiary && (
               <div className="flex justify-between py-3 border-b border-gray-200 dark:border-gray-700">
                 <span className="text-gray-600 dark:text-gray-400">Save as Beneficiary</span>
                 <span className="font-medium text-gray-900 dark:text-white">{beneficiaryName}</span>
               </div>
             )}
+            
+            <div className="flex justify-between py-3 border-b border-gray-200 dark:border-gray-700">
+              <span className="text-gray-600 dark:text-gray-400">Amount</span>
+              <span className="font-medium text-gray-900 dark:text-white">{formatCurrency(Number(amount))}</span>
+            </div>
             
             <div className="flex justify-between py-3">
               <span className="text-gray-600 dark:text-gray-400">Wallet Balance</span>
