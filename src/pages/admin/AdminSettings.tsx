@@ -20,7 +20,9 @@ import {
   Building,
   Key,
   Eye,
-  EyeOff
+  EyeOff,
+  CreditCard,
+  Lock
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../store/authStore';
@@ -40,6 +42,7 @@ const AdminSettings: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState<Record<string, string>>({});
   const [showApiToken, setShowApiToken] = useState(false);
+  const [showFlutterwaveEncryptionKey, setShowFlutterwaveEncryptionKey] = useState(false);
 
   useEffect(() => {
     if (!user?.isAdmin) {
@@ -102,7 +105,7 @@ const AdminSettings: React.FC = () => {
         if (!setting) continue;
 
         // Check if it's an API setting
-        if (key.includes('maskawa') || key.includes('api')) {
+        if (key.includes('maskawa') || key.includes('api') || key.includes('flutterwave')) {
           await supabase
             .from('api_settings')
             .update({ 
@@ -180,13 +183,17 @@ const AdminSettings: React.FC = () => {
       case 'maskawa_token':
       case 'maskawa_base_url':
         return <Key className="text-red-500" size={20} />;
+      case 'flutterwave_public_key':
+        return <CreditCard className="text-purple-500" size={20} />;
+      case 'flutterwave_encryption_key':
+        return <Lock className="text-red-500" size={20} />;
       default:
         return <Settings className="text-gray-500" size={20} />;
     }
   };
 
   const settingCategories = {
-    'API Configuration': ['maskawa_token', 'maskawa_base_url'],
+    'API Configuration': ['maskawa_token', 'maskawa_base_url', 'flutterwave_public_key', 'flutterwave_encryption_key'],
     'General': ['site_name', 'support_email', 'support_phone'],
     'Footer Information': ['footer_company_name', 'footer_email', 'footer_phone', 'footer_address'],
     'Homepage Banners': ['hero_banner_image', 'hero_banner_image_alt', 'steps_banner_image'],
@@ -260,7 +267,7 @@ const AdminSettings: React.FC = () => {
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{category}</h2>
                 {category === 'API Configuration' && (
                   <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                    Configure MASKAWASUBAPI integration settings for airtime, data, and electricity services
+                    Configure MASKAWASUBAPI and Flutterwave integration settings for services
                   </p>
                 )}
                 {category === 'Footer Information' && (
@@ -298,24 +305,32 @@ const AdminSettings: React.FC = () => {
                             <option value="false">Disabled</option>
                             <option value="true">Enabled</option>
                           </select>
-                        ) : setting.key === 'maskawa_token' ? (
+                        ) : setting.key === 'maskawa_token' || setting.key === 'flutterwave_encryption_key' ? (
                           <div className="relative">
                             <input
-                              type={showApiToken ? 'text' : 'password'}
+                              type={setting.key === 'maskawa_token' ? (showApiToken ? 'text' : 'password') : (showFlutterwaveEncryptionKey ? 'text' : 'password')}
                               value={formData[key] || setting.value}
                               onChange={(e) => handleChange(key, e.target.value)}
-                              placeholder="Enter MASKAWA API token"
+                              placeholder={setting.key === 'maskawa_token' ? "Enter MASKAWA API token" : "Enter Flutterwave encryption key"}
                               className="w-full px-3 py-2 pr-10 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0F9D58]"
                             />
                             <button
                               type="button"
-                              onClick={() => setShowApiToken(!showApiToken)}
+                              onClick={() => setting.key === 'maskawa_token' ? setShowApiToken(!showApiToken) : setShowFlutterwaveEncryptionKey(!showFlutterwaveEncryptionKey)}
                               className="absolute inset-y-0 right-0 pr-3 flex items-center"
                             >
-                              {showApiToken ? (
-                                <EyeOff className="h-4 w-4 text-gray-400" />
+                              {setting.key === 'maskawa_token' ? (
+                                showApiToken ? (
+                                  <EyeOff className="h-4 w-4 text-gray-400" />
+                                ) : (
+                                  <Eye className="h-4 w-4 text-gray-400" />
+                                )
                               ) : (
-                                <Eye className="h-4 w-4 text-gray-400" />
+                                showFlutterwaveEncryptionKey ? (
+                                  <EyeOff className="h-4 w-4 text-gray-400" />
+                                ) : (
+                                  <Eye className="h-4 w-4 text-gray-400" />
+                                )
                               )}
                             </button>
                           </div>
@@ -403,6 +418,18 @@ const AdminSettings: React.FC = () => {
                             Base URL for MASKAWASUBAPI (usually https://maskawasubapi.com)
                           </p>
                         )}
+
+                        {setting.key === 'flutterwave_public_key' && (
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            Flutterwave public key for client-side integration (starts with FLWPUBK-)
+                          </p>
+                        )}
+
+                        {setting.key === 'flutterwave_encryption_key' && (
+                          <p className="text-xs text-red-500 dark:text-red-400 mt-1">
+                            ⚠️ Keep this encryption key secure. It's used to encrypt sensitive payment data.
+                          </p>
+                        )}
                       </div>
                     </div>
                   );
@@ -419,9 +446,9 @@ const AdminSettings: React.FC = () => {
           </h3>
           <div className="space-y-3 text-sm text-blue-800 dark:text-blue-200">
             <p>• <strong>MASKAWA Token:</strong> Required for airtime, data, and electricity bill payments</p>
-            <p>• <strong>Base URL:</strong> The API endpoint for MASKAWASUBAPI service</p>
+            <p>• <strong>Flutterwave Keys:</strong> Required for virtual account creation and payment processing</p>
             <p>• <strong>Security:</strong> API tokens are encrypted and only accessible to admin users</p>
-            <p>• <strong>Testing:</strong> Use the services to verify API integration is working correctly</p>
+            <p>• <strong>Important Note:</strong> The Flutterwave Secret Key is not stored here and must be set in your Supabase Edge Function environment variables</p>
           </div>
         </div>
       </div>

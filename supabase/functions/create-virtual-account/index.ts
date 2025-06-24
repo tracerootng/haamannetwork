@@ -31,6 +31,7 @@ serve(async (req) => {
     // Parse request body
     const { userId, email, firstName, lastName, phoneNumber, bvn } = await req.json();
 
+    // Validate required fields
     if (!userId || !email || !firstName || !lastName) {
       throw new Error("Missing required user information");
     }
