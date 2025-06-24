@@ -124,7 +124,6 @@ const FundWalletPage: React.FC = () => {
                     <ul className="mt-1 text-sm text-blue-800 dark:text-blue-200 space-y-1">
                       <li>• Transfers to this account are processed instantly</li>
                       <li>• Minimum deposit amount: ₦100</li>
-                      <li>• This account is unique to you - do not share it</li>
                       <li>• For issues with transfers, contact support</li>
                     </ul>
                   </div>
