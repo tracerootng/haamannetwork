@@ -13,10 +13,11 @@ import {
   Eye,
   Plus,
   Wallet,
-  Wifi
+  Wifi,
+  Bank
 } from 'lucide-react';
-import { useAuthStore } from '../../store/authStore';
 import { supabase } from '../../lib/supabase';
+import { useAuthStore } from '../../store/authStore';
 import { formatCurrency } from '../../lib/utils';
 
 type DashboardStats = {
@@ -29,6 +30,7 @@ type DashboardStats = {
   newUsersToday: number;
   newUsersThisWeek: number;
   newUsersThisMonth: number;
+  totalVirtualAccounts: number;
 };
 
 const AdminDashboard: React.FC = () => {
@@ -43,7 +45,8 @@ const AdminDashboard: React.FC = () => {
     activeUsers: 0,
     newUsersToday: 0,
     newUsersThisWeek: 0,
-    newUsersThisMonth: 0
+    newUsersThisMonth: 0,
+    totalVirtualAccounts: 0
   });
   const [loading, setLoading] = useState(true);
   const [recentUsers, setRecentUsers] = useState<any[]>([]);
@@ -119,6 +122,12 @@ const AdminDashboard: React.FC = () => {
         .select('*', { count: 'exact', head: true })
         .gte('created_at', oneMonthAgo.toISOString());
 
+      // Count virtual accounts
+      const { count: virtualAccountsCount } = await supabase
+        .from('profiles')
+        .select('*', { count: 'exact', head: true })
+        .not('virtual_account_number', 'is', null);
+
       setStats({
         totalUsers: usersCount || 0,
         totalProducts: productsCount || 0,
@@ -128,7 +137,8 @@ const AdminDashboard: React.FC = () => {
         activeUsers: uniqueActiveUsers,
         newUsersToday: newUsersToday || 0,
         newUsersThisWeek: newUsersThisWeek || 0,
-        newUsersThisMonth: newUsersThisMonth || 0
+        newUsersThisMonth: newUsersThisMonth || 0,
+        totalVirtualAccounts: virtualAccountsCount || 0
       });
     } catch (error) {
       console.error('Error fetching dashboard stats:', error);
@@ -236,6 +246,13 @@ const AdminDashboard: React.FC = () => {
       icon: Wallet,
       path: '/admin/wallet',
       color: 'bg-emerald-500',
+    },
+    {
+      title: 'Virtual Accounts',
+      description: 'Manage virtual accounts',
+      icon: Bank,
+      path: '/admin/virtual-accounts',
+      color: 'bg-pink-500',
     },
     {
       title: 'Data Plans',
@@ -351,7 +368,7 @@ const AdminDashboard: React.FC = () => {
           ))}
         </div>
 
-        {/* User Growth Stats */}
+        {/* Additional Stats */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 border border-gray-200 dark:border-gray-700">
             <div className="flex items-center justify-between mb-4">
@@ -365,22 +382,22 @@ const AdminDashboard: React.FC = () => {
           
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 border border-gray-200 dark:border-gray-700">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">New Users This Week</h3>
-              <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">
-                <Users className="text-green-500" size={20} />
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Pending Transactions</h3>
+              <div className="w-10 h-10 bg-yellow-100 dark:bg-yellow-900/30 rounded-full flex items-center justify-center">
+                <CreditCard className="text-yellow-500" size={20} />
               </div>
             </div>
-            <p className="text-3xl font-bold text-gray-900 dark:text-white">{stats.newUsersThisWeek}</p>
+            <p className="text-3xl font-bold text-gray-900 dark:text-white">{stats.pendingTransactions}</p>
           </div>
           
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 border border-gray-200 dark:border-gray-700">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">New Users This Month</h3>
-              <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-full flex items-center justify-center">
-                <Users className="text-purple-500" size={20} />
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Virtual Accounts</h3>
+              <div className="w-10 h-10 bg-pink-100 dark:bg-pink-900/30 rounded-full flex items-center justify-center">
+                <Bank className="text-pink-500" size={20} />
               </div>
             </div>
-            <p className="text-3xl font-bold text-gray-900 dark:text-white">{stats.newUsersThisMonth}</p>
+            <p className="text-3xl font-bold text-gray-900 dark:text-white">{stats.totalVirtualAccounts}</p>
           </div>
         </div>
 
