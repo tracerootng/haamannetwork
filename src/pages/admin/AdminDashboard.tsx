@@ -1,21 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  Users, 
-  ShoppingBag, 
-  DollarSign, 
-  TrendingUp, 
-  Settings,
-  Package,
-  CreditCard,
-  Activity,
-  LogOut,
-  Eye,
-  Plus,
-  Wallet,
-  Wifi,
-  Bank
-} from 'lucide-react';
+import { Users, ShoppingBag, DollarSign, TrendingUp, Settings, Package, CreditCard, Activity, LogOut, Eye, Plus, Wallet, Wifi, Ban as Bank } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../store/authStore';
 import { formatCurrency } from '../../lib/utils';
