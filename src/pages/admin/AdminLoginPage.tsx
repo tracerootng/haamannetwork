@@ -25,14 +25,18 @@ const AdminLoginPage: React.FC = () => {
 
     try {
       await login(formData.email, formData.password);
-      // Check if user is admin after login
-      const { user } = useAuthStore.getState();
-      if (user?.isAdmin) {
-        navigate('/admin/dashboard');
-      } else {
-        setError('Access denied. Admin privileges required.');
-        await useAuthStore.getState().logout();
-      }
+      
+      // Wait a moment for the state to update, then check admin status
+      setTimeout(() => {
+        const { user } = useAuthStore.getState();
+        if (user?.isAdmin) {
+          navigate('/admin/dashboard');
+        } else {
+          setError('Access denied. Admin privileges required.');
+          useAuthStore.getState().logout();
+        }
+      }, 100);
+      
     } catch (error: any) {
       setError(error.message);
     }
