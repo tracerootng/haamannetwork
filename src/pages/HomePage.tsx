@@ -5,6 +5,7 @@ import { useAuthStore } from '../store/authStore';
 import { supabase } from '../lib/supabase';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
+import Badge from '../components/ui/Badge';
 import ProductSlideshow from '../components/home/ProductSlideshow';
 import { formatCurrency } from '../lib/utils';
 
@@ -204,7 +205,7 @@ const HomePage: React.FC = () => {
               {/* New Badge */}
               <div className="inline-flex items-center bg-white bg-opacity-20 backdrop-blur-sm rounded-full px-4 py-2 text-white">
                 <span className="bg-white text-[#0F9D58] px-2 py-1 rounded-full text-xs font-bold mr-3">New</span>
-                <span className="text-sm">Haaman Network is live in Nigeria →</span>
+                <span className="text-sm">Delivering Excellence Across Nigeria</span>
               </div>
 
               <div className="space-y-4 sm:space-y-6">
@@ -457,7 +458,7 @@ const HomePage: React.FC = () => {
                 <details key={index} className="group">
                   <summary className="flex justify-between items-center p-4 bg-gray-50 dark:bg-gray-800 rounded-xl cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
                     <span className="font-medium text-sm sm:text-base pr-4">{faq.question}</span>
-                    <ChevronDown className="w-5 h-5 group-open:rotate-180 transition-transform flex-shrink-0" />
+                    <ChevronDown className="w-4 h-4 group-open:rotate-180 transition-transform" />
                   </summary>
                   <div className="p-4 bg-gray-100 dark:bg-gray-700 rounded-b-xl">
                     <p className="text-gray-600 dark:text-gray-300 text-sm sm:text-base">{faq.answer}</p>
