@@ -45,7 +45,7 @@ const Layout: React.FC = () => {
         <Header toggleDarkMode={toggleDarkMode} isDarkMode={isDarkMode} />
       )}
       
-      <main className={`flex-1 ${!isDashboardPage && !isHomePage ? 'container-pad' : ''} ${isAuthenticated ? 'pb-20' : ''}`}>
+      <main className={`flex-1 ${!isDashboardPage && !isHomePage ? 'container-pad' : ''} ${isAuthenticated ? 'pb-32' : ''}`}>
         <Outlet />
       </main>
       

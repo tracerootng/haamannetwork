@@ -164,7 +164,7 @@ const AirtimeServicePage: React.FC = () => {
   );
 
   const renderStepOne = () => (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-20">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Header */}
       <div className="bg-white dark:bg-gray-800 px-4 py-4 flex items-center border-b border-gray-200 dark:border-gray-700">
         <button
@@ -291,17 +291,17 @@ const AirtimeServicePage: React.FC = () => {
             />
           </button>
         </div>
-      </div>
 
-      {/* Continue Button */}
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 z-10">
-        <Button
-          onClick={handleContinue}
-          disabled={!selectedNetwork || !phoneNumber || !amount || Number(amount) < 100}
-          className="w-full bg-[#0F9D58] hover:bg-[#0d8a4f] text-white py-4 rounded-xl font-semibold text-lg disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          Continue
-        </Button>
+        {/* Continue Button */}
+        <div className="p-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
+          <Button
+            onClick={handleContinue}
+            disabled={!selectedNetwork || !phoneNumber || !amount || Number(amount) < 100}
+            className="w-full bg-[#0F9D58] hover:bg-[#0d8a4f] text-white py-4 rounded-xl font-semibold text-lg disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Continue
+          </Button>
+        </div>
       </div>
     </div>
   );
