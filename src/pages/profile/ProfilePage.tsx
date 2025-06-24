@@ -50,10 +50,26 @@ const ProfilePage: React.FC = () => {
     setVirtualAccountError('');
 
     try {
-      // Split name into first and last name
-      const nameParts = user.name.split(' ');
-      const firstName = nameParts[0];
-      const lastName = nameParts.length > 1 ? nameParts[nameParts.length - 1] : '';
+      // Split name into first and last name with proper fallbacks
+      const userName = user.name?.trim() || 'User';
+      const nameParts = userName.split(' ').filter(part => part.length > 0);
+      
+      let firstName: string;
+      let lastName: string;
+      
+      if (nameParts.length === 0) {
+        // Fallback if name is empty or only whitespace
+        firstName = 'User';
+        lastName = 'User';
+      } else if (nameParts.length === 1) {
+        // Single name - use it for both first and last name
+        firstName = nameParts[0];
+        lastName = nameParts[0];
+      } else {
+        // Multiple names - use first and last
+        firstName = nameParts[0];
+        lastName = nameParts[nameParts.length - 1];
+      }
 
       await createVirtualAccount(
         user.id,
