@@ -1,18 +1,98 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Copy, Share2, Users, Gift, TrendingUp, Award } from 'lucide-react';
+import { Copy, Share2, Users, Gift, TrendingUp, Award, ArrowLeft, CheckCircle, User } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { formatCurrency } from '../../lib/utils';
+import { supabase } from '../../lib/supabase';
+import Card from '../../components/ui/Card';
+
+type Referral = {
+  id: string;
+  name: string;
+  email: string;
+  created_at: string;
+};
 
 const ReferEarnPage: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const [copied, setCopied] = useState(false);
+  const [referrals, setReferrals] = useState<Referral[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [referralStats, setReferralStats] = useState({
+    totalReferrals: 0,
+    referralEarnings: 0,
+    bonusPercentage: 6
+  });
   
   // Generate referral code based on user info
-  const referralCode = user ? `haaman-${user.name.replace(/\s+/g, '').toUpperCase()}${user.id.slice(-3)}` : 'haaman-USER123';
-  const referralRewards = 0; // This would come from the database
-  const totalReferrals = 0; // This would come from the database
+  const referralCode = user ? user.referralCode : 'haaman-USER123';
+  const referralLink = `https://haamannetwork.com/signup?ref=${referralCode}`;
+
+  useEffect(() => {
+    if (user) {
+      fetchReferrals();
+      fetchReferralStats();
+    }
+  }, [user]);
+
+  const fetchReferrals = async () => {
+    if (!user) return;
+    
+    setLoading(true);
+    try {
+      // Get users who were referred by the current user
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, name, email, created_at')
+        .eq('referred_by', user.id)
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      setReferrals(data || []);
+    } catch (error) {
+      console.error('Error fetching referrals:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchReferralStats = async () => {
+    if (!user) return;
+    
+    try {
+      // Get referral bonus percentage from admin settings
+      const { data: settingsData, error: settingsError } = await supabase
+        .from('admin_settings')
+        .select('value')
+        .eq('key', 'referral_bonus_percentage')
+        .single();
+      
+      if (!settingsError && settingsData) {
+        setReferralStats(prev => ({
+          ...prev,
+          bonusPercentage: parseFloat(settingsData.value) || 6
+        }));
+      }
+      
+      // Get user's current stats
+      const { data: userData, error: userError } = await supabase
+        .from('profiles')
+        .select('total_referrals, referral_earnings')
+        .eq('id', user.id)
+        .single();
+      
+      if (!userError && userData) {
+        setReferralStats(prev => ({
+          ...prev,
+          totalReferrals: userData.total_referrals || 0,
+          referralEarnings: userData.referral_earnings || 0
+        }));
+      }
+    } catch (error) {
+      console.error('Error fetching referral stats:', error);
+    }
+  };
 
   const copyReferralCode = () => {
     navigator.clipboard.writeText(referralCode);
@@ -25,7 +105,10 @@ const ReferEarnPage: React.FC = () => {
       navigator.share({
         title: 'Join Haaman Network',
         text: `Join me on Haaman Network and get amazing rewards! Use my referral code: ${referralCode}`,
-        url: `https://haamannetwork.com/signup?ref=${referralCode}`
+        url: referralLink
+      }).catch(err => {
+        console.error('Error sharing:', err);
+        copyReferralCode();
       });
     } else {
       // Fallback for browsers that don't support Web Share API
@@ -70,7 +153,7 @@ const ReferEarnPage: React.FC = () => {
             
             {/* Bonus Badge */}
             <div className="inline-block bg-white text-[#0F9D58] px-6 py-3 rounded-2xl font-bold text-xl">
-              6% Bonus
+              {referralStats.bonusPercentage}% Bonus
             </div>
           </div>
         </div>
@@ -81,7 +164,7 @@ const ReferEarnPage: React.FC = () => {
             <div className="w-12 h-12 bg-[#0F9D58]/10 rounded-full flex items-center justify-center mx-auto mb-3">
               <Users size={24} className="text-[#0F9D58]" />
             </div>
-            <div className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white mb-1">{totalReferrals}</div>
+            <div className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white mb-1">{referralStats.totalReferrals}</div>
             <div className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">Total Referrals</div>
           </div>
           
@@ -89,7 +172,7 @@ const ReferEarnPage: React.FC = () => {
             <div className="w-12 h-12 bg-[#0F9D58]/10 rounded-full flex items-center justify-center mx-auto mb-3">
               <Award size={24} className="text-[#0F9D58]" />
             </div>
-            <div className="text-lg sm:text-2xl font-bold text-[#0F9D58] mb-1">{formatCurrency(referralRewards)}</div>
+            <div className="text-lg sm:text-2xl font-bold text-[#0F9D58] mb-1">{formatCurrency(referralStats.referralEarnings)}</div>
             <div className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">Total Earned</div>
           </div>
         </div>
@@ -133,7 +216,7 @@ const ReferEarnPage: React.FC = () => {
               <div className="flex-1 min-w-0">
                 <h4 className="font-semibold text-gray-900 dark:text-white text-sm">You both earn rewards</h4>
                 <p className="text-xs text-gray-600 dark:text-gray-400">
-                  Get 6% bonus on their first deposit, credited instantly to your wallet
+                  Get {referralStats.bonusPercentage}% bonus on their first deposit, credited instantly to your wallet
                 </p>
               </div>
             </div>
@@ -177,6 +260,32 @@ const ReferEarnPage: React.FC = () => {
               </button>
             </div>
           </div>
+          
+          {/* Referral Link Section */}
+          <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 border border-gray-200 dark:border-gray-700">
+            <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-3">
+              Your Referral Link
+            </h3>
+            
+            <div className="flex items-center space-x-3">
+              <div className="flex-1 bg-gray-100 dark:bg-gray-700 rounded-xl px-3 sm:px-4 py-3 min-w-0">
+                <span className="text-gray-700 dark:text-gray-300 text-sm break-all">
+                  {referralLink}
+                </span>
+              </div>
+              
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(referralLink);
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 2000);
+                }}
+                className="px-4 py-3 rounded-xl font-medium bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-500 transition-all flex-shrink-0"
+              >
+                <Copy size={16} />
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* Referral History */}
@@ -185,14 +294,39 @@ const ReferEarnPage: React.FC = () => {
             Recent Referrals
           </h3>
           
-          <div className="text-center py-8">
-            <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Users size={24} className="text-gray-400" />
+          {loading ? (
+            <div className="flex justify-center py-6">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#0F9D58]"></div>
             </div>
-            <p className="text-gray-500 dark:text-gray-400 text-sm">
-              No referrals yet. Start sharing your code to earn rewards!
-            </p>
-          </div>
+          ) : referrals.length > 0 ? (
+            <div className="space-y-3">
+              {referrals.map((referral) => (
+                <Card key={referral.id} className="p-3">
+                  <div className="flex items-center">
+                    <div className="w-10 h-10 bg-[#0F9D58]/10 rounded-full flex items-center justify-center mr-3">
+                      <User size={18} className="text-[#0F9D58]" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-gray-900 dark:text-white text-sm truncate">{referral.name}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{referral.email}</p>
+                    </div>
+                    <div className="text-right text-xs text-gray-500 dark:text-gray-400">
+                      {new Date(referral.created_at).toLocaleDateString()}
+                    </div>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Users size={24} className="text-gray-400" />
+              </div>
+              <p className="text-gray-500 dark:text-gray-400 text-sm">
+                No referrals yet. Start sharing your code to earn rewards!
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Terms & Conditions */}
