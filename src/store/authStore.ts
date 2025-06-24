@@ -1,33 +1,22 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { User } from '@supabase/supabase-js';
+import { User } from '../types';
 import { supabase } from '../lib/supabase';
 
-type AuthUser = {
-  id: string;
-  name: string;
-  email: string;
-  phone?: string;
-  walletBalance: number;
-  isAdmin: boolean;
-  referralCode: string;
-  referredBy?: string;
-  totalReferrals: number;
-  referralEarnings: number;
-  createdAt: string;
-};
+type AuthUser = User;
 
 type AuthState = {
   user: AuthUser | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  signup: (email: string, password: string, name: string, phone?: string, referralCode?: string) => Promise<void>;
+  signup: (email: string, password: string, name: string, phone?: string, referralCode?: string, bvn?: string) => Promise<void>;
   logout: () => Promise<void>;
   updateUser: (data: Partial<AuthUser>) => Promise<void>;
   updateWalletBalance: (newBalance: number) => Promise<void>;
   checkAuth: () => Promise<void>;
   refreshUserData: () => Promise<void>;
+  createVirtualAccount: (userId: string, email: string, firstName: string, lastName: string, phoneNumber?: string, bvn?: string) => Promise<void>;
 };
 
 export const useAuthStore = create<AuthState>()(
@@ -102,6 +91,10 @@ export const useAuthStore = create<AuthState>()(
                         totalReferrals: existingProfile.total_referrals,
                         referralEarnings: existingProfile.referral_earnings,
                         createdAt: existingProfile.created_at,
+                        virtualAccountBankName: existingProfile.virtual_account_bank_name,
+                        virtualAccountNumber: existingProfile.virtual_account_number,
+                        virtualAccountReference: existingProfile.virtual_account_reference,
+                        bvn: existingProfile.bvn,
                       },
                       isAuthenticated: true,
                       isLoading: false,
@@ -123,6 +116,10 @@ export const useAuthStore = create<AuthState>()(
                       totalReferrals: insertedProfile.total_referrals,
                       referralEarnings: insertedProfile.referral_earnings,
                       createdAt: insertedProfile.created_at,
+                      virtualAccountBankName: insertedProfile.virtual_account_bank_name,
+                      virtualAccountNumber: insertedProfile.virtual_account_number,
+                      virtualAccountReference: insertedProfile.virtual_account_reference,
+                      bvn: insertedProfile.bvn,
                     },
                     isAuthenticated: true,
                     isLoading: false,
@@ -146,6 +143,10 @@ export const useAuthStore = create<AuthState>()(
                   totalReferrals: profile.total_referrals,
                   referralEarnings: profile.referral_earnings,
                   createdAt: profile.created_at,
+                  virtualAccountBankName: profile.virtual_account_bank_name,
+                  virtualAccountNumber: profile.virtual_account_number,
+                  virtualAccountReference: profile.virtual_account_reference,
+                  bvn: profile.bvn,
                 },
                 isAuthenticated: true,
                 isLoading: false,
@@ -158,7 +159,7 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      signup: async (email: string, password: string, name: string, phone?: string, referralCode?: string) => {
+      signup: async (email: string, password: string, name: string, phone?: string, referralCode?: string, bvn?: string) => {
         set({ isLoading: true });
         try {
           const { data, error } = await supabase.auth.signUp({
@@ -169,6 +170,7 @@ export const useAuthStore = create<AuthState>()(
                 name,
                 phone,
                 referralCode,
+                bvn,
               },
             },
           });
@@ -210,6 +212,7 @@ export const useAuthStore = create<AuthState>()(
               total_referrals: 0,
               referral_earnings: 0,
               created_at: new Date().toISOString(),
+              bvn: bvn || null,
             };
 
             const { data: insertedProfile, error: profileError } = await supabase
@@ -242,6 +245,10 @@ export const useAuthStore = create<AuthState>()(
                     totalReferrals: existingProfile.total_referrals,
                     referralEarnings: existingProfile.referral_earnings,
                     createdAt: existingProfile.created_at,
+                    virtualAccountBankName: existingProfile.virtual_account_bank_name,
+                    virtualAccountNumber: existingProfile.virtual_account_number,
+                    virtualAccountReference: existingProfile.virtual_account_reference,
+                    bvn: existingProfile.bvn,
                   },
                   isAuthenticated: true,
                   isLoading: false,
@@ -277,23 +284,52 @@ export const useAuthStore = create<AuthState>()(
               }]);
             }
 
+            // Set user in state
+            const user = {
+              id: insertedProfile.id,
+              name: insertedProfile.name,
+              email: insertedProfile.email,
+              phone: insertedProfile.phone,
+              walletBalance: insertedProfile.wallet_balance,
+              isAdmin: insertedProfile.is_admin,
+              referralCode: insertedProfile.referral_code,
+              referredBy: insertedProfile.referred_by,
+              totalReferrals: insertedProfile.total_referrals,
+              referralEarnings: insertedProfile.referral_earnings,
+              createdAt: insertedProfile.created_at,
+              virtualAccountBankName: insertedProfile.virtual_account_bank_name,
+              virtualAccountNumber: insertedProfile.virtual_account_number,
+              virtualAccountReference: insertedProfile.virtual_account_reference,
+              bvn: insertedProfile.bvn,
+            };
+
             set({
-              user: {
-                id: insertedProfile.id,
-                name: insertedProfile.name,
-                email: insertedProfile.email,
-                phone: insertedProfile.phone,
-                walletBalance: insertedProfile.wallet_balance,
-                isAdmin: insertedProfile.is_admin,
-                referralCode: insertedProfile.referral_code,
-                referredBy: insertedProfile.referred_by,
-                totalReferrals: insertedProfile.total_referrals,
-                referralEarnings: insertedProfile.referral_earnings,
-                createdAt: insertedProfile.created_at,
-              },
+              user,
               isAuthenticated: true,
               isLoading: false,
             });
+
+            // Create virtual account if BVN is provided
+            if (bvn) {
+              try {
+                // Split name into first and last name
+                const nameParts = name.split(' ');
+                const firstName = nameParts[0];
+                const lastName = nameParts.length > 1 ? nameParts[nameParts.length - 1] : '';
+                
+                await get().createVirtualAccount(
+                  user.id,
+                  email,
+                  firstName,
+                  lastName,
+                  phone,
+                  bvn
+                );
+              } catch (error) {
+                console.error('Error creating virtual account:', error);
+                // Don't throw here, as the signup was successful
+              }
+            }
           }
         } catch (error: any) {
           set({ isLoading: false });
@@ -379,6 +415,10 @@ export const useAuthStore = create<AuthState>()(
                 totalReferrals: profile.total_referrals,
                 referralEarnings: profile.referral_earnings,
                 createdAt: profile.created_at,
+                virtualAccountBankName: profile.virtual_account_bank_name,
+                virtualAccountNumber: profile.virtual_account_number,
+                virtualAccountReference: profile.virtual_account_reference,
+                bvn: profile.bvn,
               },
             });
           }
@@ -444,6 +484,10 @@ export const useAuthStore = create<AuthState>()(
                       totalReferrals: existingProfile.total_referrals,
                       referralEarnings: existingProfile.referral_earnings,
                       createdAt: existingProfile.created_at,
+                      virtualAccountBankName: existingProfile.virtual_account_bank_name,
+                      virtualAccountNumber: existingProfile.virtual_account_number,
+                      virtualAccountReference: existingProfile.virtual_account_reference,
+                      bvn: existingProfile.bvn,
                     },
                     isAuthenticated: true,
                   });
@@ -463,6 +507,10 @@ export const useAuthStore = create<AuthState>()(
                   totalReferrals: insertedProfile.total_referrals,
                   referralEarnings: insertedProfile.referral_earnings,
                   createdAt: insertedProfile.created_at,
+                  virtualAccountBankName: insertedProfile.virtual_account_bank_name,
+                  virtualAccountNumber: insertedProfile.virtual_account_number,
+                  virtualAccountReference: insertedProfile.virtual_account_reference,
+                  bvn: insertedProfile.bvn,
                 },
                 isAuthenticated: true,
               });
@@ -481,12 +529,68 @@ export const useAuthStore = create<AuthState>()(
                 totalReferrals: profile.total_referrals,
                 referralEarnings: profile.referral_earnings,
                 createdAt: profile.created_at,
+                virtualAccountBankName: profile.virtual_account_bank_name,
+                virtualAccountNumber: profile.virtual_account_number,
+                virtualAccountReference: profile.virtual_account_reference,
+                bvn: profile.bvn,
               },
               isAuthenticated: true,
             });
           }
         } else {
           set({ user: null, isAuthenticated: false });
+        }
+      },
+
+      createVirtualAccount: async (userId, email, firstName, lastName, phoneNumber, bvn) => {
+        try {
+          const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+          if (!supabaseUrl) {
+            throw new Error('Supabase URL not configured');
+          }
+
+          const response = await fetch(`${supabaseUrl}/functions/v1/create-virtual-account`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+            },
+            body: JSON.stringify({
+              userId,
+              email,
+              firstName,
+              lastName,
+              phoneNumber,
+              bvn,
+            }),
+          });
+
+          if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Failed to create virtual account: ${errorText}`);
+          }
+
+          const result = await response.json();
+          
+          if (!result.success) {
+            throw new Error(result.error || 'Failed to create virtual account');
+          }
+
+          // Update user state with virtual account details
+          set((state) => ({
+            user: state.user ? {
+              ...state.user,
+              virtualAccountBankName: result.data.bank_name,
+              virtualAccountNumber: result.data.account_number,
+              virtualAccountReference: result.data.reference,
+              bvn: bvn,
+            } : null,
+          }));
+
+          return result.data;
+        } catch (error) {
+          console.error('Error creating virtual account:', error);
+          throw error;
         }
       },
     }),

@@ -11,6 +11,10 @@ export type User = {
   totalReferrals: number;
   referralEarnings: number;
   createdAt: string;
+  virtualAccountBankName?: string;
+  virtualAccountNumber?: string;
+  virtualAccountReference?: string;
+  bvn?: string;
 };
 
 export type Transaction = {
@@ -24,6 +28,7 @@ export type Transaction = {
     [key: string]: any;
   };
   createdAt: string;
+  flutterwaveTxRef?: string;
 };
 
 export type Product = {
@@ -100,4 +105,10 @@ export type ReferralData = {
   bonusAmount: number;
   status: 'pending' | 'paid';
   createdAt: string;
+};
+
+export type VirtualAccount = {
+  bankName: string;
+  accountNumber: string;
+  reference: string;
 };

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
-import { Mail, Lock, User, Phone, Eye, EyeOff, AlertCircle, CheckCircle, Gift } from 'lucide-react';
+import { Mail, Lock, User, Phone, Eye, EyeOff, AlertCircle, CheckCircle, Gift, CreditCard } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 
 const SignupPage: React.FC = () => {
@@ -16,6 +16,8 @@ const SignupPage: React.FC = () => {
     password: '',
     confirmPassword: '',
     referralCode: referralCode || '',
+    bvn: '',
+    createVirtualAccount: false,
   });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -65,6 +67,15 @@ const SignupPage: React.FC = () => {
       newErrors.confirmPassword = 'Passwords do not match';
     }
 
+    // Validate BVN if virtual account creation is selected
+    if (formData.createVirtualAccount) {
+      if (!formData.bvn) {
+        newErrors.bvn = 'BVN is required for virtual account creation';
+      } else if (!/^\d{11}$/.test(formData.bvn)) {
+        newErrors.bvn = 'BVN must be 11 digits';
+      }
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -77,7 +88,17 @@ const SignupPage: React.FC = () => {
     }
 
     try {
-      await signup(formData.email, formData.password, formData.name, formData.phone, formData.referralCode);
+      // Only pass BVN if virtual account creation is selected
+      const bvn = formData.createVirtualAccount ? formData.bvn : undefined;
+      
+      await signup(
+        formData.email, 
+        formData.password, 
+        formData.name, 
+        formData.phone, 
+        formData.referralCode,
+        bvn
+      );
       navigate('/');
     } catch (error: any) {
       // Check if the error is specifically about user already existing
@@ -208,6 +229,55 @@ const SignupPage: React.FC = () => {
               />
               {errors.phone && (
                 <p className="mt-1 text-sm text-red-600">{errors.phone}</p>
+              )}
+            </div>
+
+            {/* Virtual Account Option */}
+            <div className="bg-blue-50 p-4 rounded-xl">
+              <div className="flex items-center mb-2">
+                <input
+                  id="createVirtualAccount"
+                  name="createVirtualAccount"
+                  type="checkbox"
+                  checked={formData.createVirtualAccount}
+                  onChange={(e) => setFormData({...formData, createVirtualAccount: e.target.checked})}
+                  className="h-4 w-4 text-[#0F9D58] focus:ring-[#0F9D58] border-gray-300 rounded"
+                />
+                <label htmlFor="createVirtualAccount" className="ml-2 block text-sm font-medium text-gray-700">
+                  Create Virtual Account for Wallet Funding
+                </label>
+              </div>
+              <p className="text-xs text-gray-600 mb-2">
+                Get a dedicated bank account number for easy wallet funding via bank transfer.
+              </p>
+              
+              {formData.createVirtualAccount && (
+                <div className="mt-3">
+                  <label htmlFor="bvn" className="block text-sm font-medium text-gray-700 mb-2">
+                    Bank Verification Number (BVN)
+                  </label>
+                  <div className="relative">
+                    <input
+                      id="bvn"
+                      name="bvn"
+                      type="text"
+                      value={formData.bvn}
+                      onChange={handleChange}
+                      className={`w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0F9D58] focus:border-transparent transition-all duration-200 ${
+                        errors.bvn ? 'border-red-300' : 'border-gray-300'
+                      }`}
+                      placeholder="Enter your 11-digit BVN"
+                      maxLength={11}
+                    />
+                    <CreditCard className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+                  </div>
+                  {errors.bvn && (
+                    <p className="mt-1 text-sm text-red-600">{errors.bvn}</p>
+                  )}
+                  <p className="mt-1 text-xs text-gray-500">
+                    Your BVN is required by Flutterwave to create a permanent virtual account. Your data is secure and will not be shared with third parties.
+                  </p>
+                </div>
               )}
             </div>
 
