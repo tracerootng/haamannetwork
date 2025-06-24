@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, AlertCircle, Clock, Copy, RefreshCw, CreditCard, Wallet, Bank, CheckCircle } from 'lucide-react';
+import { ArrowLeft, AlertCircle, Clock, Copy, RefreshCw, CreditCard, Wallet, Ban as Bank, CheckCircle } from 'lucide-react';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import { useAuthStore } from '../../store/authStore';
