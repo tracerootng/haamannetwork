@@ -71,7 +71,7 @@ const StorePage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="bg-gray-50 dark:bg-gray-900">
       {/* Header */}
       <div className="bg-white dark:bg-gray-800 px-4 py-4 border-b border-gray-200 dark:border-gray-700">
         <div className="flex justify-between items-center mb-4">
@@ -134,7 +134,7 @@ const StorePage: React.FC = () => {
 
       <div className="p-4 space-y-6">
         {/* Categories */}
-        <div className="flex overflow-x-auto pb-2 space-x-3 scrollbar-hide">
+        <div className="flex overflow-x-auto pb-2 space-x-3 scrollbar-hide flex-nowrap">
           {categories.map((category) => (
             <button
               key={category.value}

@@ -11,8 +11,8 @@ import { jsPDF } from 'jspdf';
 const discos = [
   { value: 'ikeja', label: 'Ikeja Electric' },
   { value: 'eko', label: 'Eko Electric' },
-  { value: 'ibadan', label: 'IBEDC' },
-  { value: 'abuja', label: 'AEDC' },
+  { value: 'ibadan', label: 'Ibadan Electric' },
+  { value: 'abuja', label: 'Abuja Electric' },
 ];
 
 const meterTypes = [

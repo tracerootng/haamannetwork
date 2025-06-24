@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, User, Search, Filter, Star, Zap, Download } from 'lucide-react';
+import { ArrowLeft, User, Search, Filter, Star, Zap, Download, Info } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import Card from '../../components/ui/Card';
@@ -532,6 +532,32 @@ const DataServicePage: React.FC = () => {
             </div>
           </div>
         </div>
+
+        {/* Data Balance Check Codes */}
+        <Card className="p-4">
+          <details className="group">
+            <summary className="flex items-center justify-between cursor-pointer list-none">
+              <div className="flex items-center">
+                <Info size={16} className="text-[#0F9D58] mr-2" />
+                <span className="font-medium text-gray-900 dark:text-white">Codes for Data Balance Check</span>
+              </div>
+              <div className="transition-transform group-open:rotate-180">
+                <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </div>
+            </summary>
+            <div className="mt-3 pl-6 text-sm text-gray-600 dark:text-gray-400">
+              <ul className="space-y-2">
+                <li>• MTN [SME]: *461*4#</li>
+                <li>• MTN [Gifting]: *131*4# or *460*260#</li>
+                <li>• 9mobile [Gifting]: *228#</li>
+                <li>• Airtel: *140#</li>
+                <li>• Glo: *127*0#</li>
+              </ul>
+            </div>
+          </details>
+        </Card>
 
         {/* Selected Plan Summary */}
         {selectedPlan && (
