@@ -68,7 +68,15 @@ const ReferEarnPage: React.FC = () => {
         .eq('key', 'referral_bonus_percentage')
         .single();
       
-      if (!settingsError && settingsData) {
+      if (settingsError) {
+        // Check if it's a "no rows found" error (PGRST116)
+        if (settingsError.code === 'PGRST116') {
+          console.warn('Referral bonus percentage setting not found, using default value');
+          // Use default value of 6% when setting doesn't exist
+        } else {
+          console.error('Error fetching referral bonus percentage:', settingsError);
+        }
+      } else if (settingsData) {
         setReferralStats(prev => ({
           ...prev,
           bonusPercentage: parseFloat(settingsData.value) || 6

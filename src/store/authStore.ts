@@ -189,7 +189,13 @@ export const useAuthStore = create<AuthState>()(
                 .single();
               
               if (referrerError) {
-                console.error('Error finding referrer:', referrerError);
+                // Check if it's a "no rows found" error (PGRST116)
+                if (referrerError.code === 'PGRST116') {
+                  console.warn('Referral code not found:', referralCode);
+                  // Continue without referrer - this is expected for invalid/non-existent codes
+                } else {
+                  console.error('Error finding referrer:', referrerError);
+                }
               } else {
                 referrerProfile = referrer;
               }
