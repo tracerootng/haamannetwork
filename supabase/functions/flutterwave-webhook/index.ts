@@ -72,7 +72,8 @@ serve(async (req) => {
       tx_ref, 
       amount, 
       currency, 
-      customer: { email }
+      customer: { email },
+      account_number // Add this line to extract the account number
     } = payload.data;
 
     // Check if this transaction has already been processed (idempotency)
@@ -98,11 +99,19 @@ serve(async (req) => {
       );
     }
 
-    // Find the user by the virtual account reference
+    // Ensure account_number is present in the payload
+    if (!account_number) {
+      console.error("Missing account_number in webhook payload for virtual account payment");
+      throw new Error("Missing account_number in webhook payload");
+    }
+
+    // Find the user by the virtual account number
     const { data: userProfile, error: userError } = await supabase
       .from("profiles")
       .select("id, wallet_balance, email")
-      .eq("virtual_account_reference", tx_ref)
+      // Change the lookup to use the virtual_account_number from the webhook payload
+      // This is more reliable for virtual account payments
+      .eq("virtual_account_number", account_number)
       .single();
 
     if (userError) {
@@ -135,8 +144,8 @@ serve(async (req) => {
       type: "wallet_funding",
       amount: parseFloat(amount),
       status: "success",
-      reference: `FLW-${tx_ref.slice(-8)}`,
-      flutterwave_tx_ref: tx_ref,
+      reference: `FLW-${payload.data.flw_ref || payload.data.tx_ref}`, // Use Flutterwave's transaction reference for the incoming payment
+      flutterwave_tx_ref: payload.data.tx_ref, // Store the incoming payment's tx_ref
       details: {
         payment_method: "bank_transfer",
         currency,
