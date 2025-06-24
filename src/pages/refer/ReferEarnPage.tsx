@@ -15,7 +15,7 @@ type Referral = {
 
 const ReferEarnPage: React.FC = () => {
   const navigate = useNavigate();
-  const { user } = useAuthStore();
+  const { user, refreshUserData } = useAuthStore();
   const [copied, setCopied] = useState(false);
   const [referrals, setReferrals] = useState<Referral[]>([]);
   const [loading, setLoading] = useState(false);
@@ -31,10 +31,12 @@ const ReferEarnPage: React.FC = () => {
 
   useEffect(() => {
     if (user) {
+      // Refresh user data first to get latest referral stats
+      refreshUserData();
       fetchReferrals();
       fetchReferralStats();
     }
-  }, [user]);
+  }, [user, refreshUserData]);
 
   const fetchReferrals = async () => {
     if (!user) return;
@@ -83,18 +85,12 @@ const ReferEarnPage: React.FC = () => {
         }));
       }
       
-      // Get user's current stats
-      const { data: userData, error: userError } = await supabase
-        .from('profiles')
-        .select('total_referrals, referral_earnings')
-        .eq('id', user.id)
-        .single();
-      
-      if (!userError && userData) {
+      // Get user's current stats from the refreshed user data
+      if (user) {
         setReferralStats(prev => ({
           ...prev,
-          totalReferrals: userData.total_referrals || 0,
-          referralEarnings: userData.referral_earnings || 0
+          totalReferrals: user.totalReferrals || 0,
+          referralEarnings: user.referralEarnings || 0
         }));
       }
     } catch (error) {
