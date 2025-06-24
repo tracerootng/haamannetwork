@@ -58,6 +58,8 @@ serve(async (req) => {
       requestBody.bvn = bvn;
     }
 
+    console.log("Making request to Flutterwave API:", JSON.stringify(requestBody, null, 2));
+
     // Make request to Flutterwave API
     const response = await fetch("https://api.flutterwave.com/v3/virtual-account-numbers", {
       method: "POST",
@@ -70,6 +72,7 @@ serve(async (req) => {
 
     // Parse response
     const responseData = await response.json();
+    console.log("Flutterwave API response:", JSON.stringify(responseData, null, 2));
 
     if (!response.ok) {
       console.error("Flutterwave API error:", responseData);
