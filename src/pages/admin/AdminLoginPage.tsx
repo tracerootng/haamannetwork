@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Shield, Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
+import { supabase } from '../../lib/supabase';
 
 const AdminLoginPage: React.FC = () => {
   const navigate = useNavigate();
@@ -24,21 +25,46 @@ const AdminLoginPage: React.FC = () => {
     setError('');
 
     try {
+      // First, attempt to sign in with Supabase Auth
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email: formData.email,
+        password: formData.password,
+      });
+
+      if (authError) throw authError;
+
+      if (!authData.user) {
+        throw new Error('Login failed. Please try again.');
+      }
+
+      // Directly check if user is admin using a direct query
+      // This bypasses the problematic RLS policies
+      const { data: profileData, error: profileError } = await supabase.rpc(
+        'is_admin_user'
+      );
+
+      if (profileError) {
+        console.error('Error checking admin status:', profileError);
+        throw new Error('Error verifying admin status. Please try again.');
+      }
+
+      // Check if user is admin
+      if (!profileData) {
+        // Sign out the user if they're not an admin
+        await supabase.auth.signOut();
+        throw new Error('Access denied. Admin privileges required.');
+      }
+
+      // Update the auth store with the user data
       await login(formData.email, formData.password);
       
-      // Wait a moment for the state to update, then check admin status
-      setTimeout(() => {
-        const { user } = useAuthStore.getState();
-        if (user?.isAdmin) {
-          navigate('/admin/dashboard');
-        } else {
-          setError('Access denied. Admin privileges required.');
-          useAuthStore.getState().logout();
-        }
-      }, 100);
+      // Navigate to admin dashboard
+      navigate('/admin/dashboard');
       
     } catch (error: any) {
       setError(error.message);
+      // If there was an error, ensure the user is signed out
+      await supabase.auth.signOut();
     }
   };
 
