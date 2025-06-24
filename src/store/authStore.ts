@@ -56,40 +56,82 @@ export const useAuthStore = create<AuthState>()(
               .single();
 
             if (profileError) {
-              // Create profile if it doesn't exist
-              const newProfile = {
-                id: data.user.id,
-                name: data.user.user_metadata?.name || 'User',
-                email: data.user.email!,
-                phone: data.user.user_metadata?.phone || '',
-                wallet_balance: 0,
-                is_admin: false,
-                referral_code: `haaman-${data.user.user_metadata?.name?.replace(/\s+/g, '').toUpperCase() || 'USER'}${data.user.id.slice(-3)}`,
-                referred_by: null,
-                total_referrals: 0,
-                referral_earnings: 0,
-                created_at: new Date().toISOString(),
-              };
+              // Only create profile if it doesn't exist (PGRST116 error code)
+              if (profileError.code === 'PGRST116') {
+                const newProfile = {
+                  id: data.user.id,
+                  name: data.user.user_metadata?.name || 'User',
+                  email: data.user.email!,
+                  phone: data.user.user_metadata?.phone || '',
+                  wallet_balance: 0,
+                  is_admin: false,
+                  referral_code: `haaman-${data.user.user_metadata?.name?.replace(/\s+/g, '').toUpperCase() || 'USER'}${data.user.id.slice(-3)}`,
+                  referred_by: null,
+                  total_referrals: 0,
+                  referral_earnings: 0,
+                  created_at: new Date().toISOString(),
+                };
 
-              await supabase.from('profiles').insert([newProfile]);
-              
-              set({
-                user: {
-                  id: newProfile.id,
-                  name: newProfile.name,
-                  email: newProfile.email,
-                  phone: newProfile.phone,
-                  walletBalance: newProfile.wallet_balance,
-                  isAdmin: newProfile.is_admin,
-                  referralCode: newProfile.referral_code,
-                  referredBy: newProfile.referred_by,
-                  totalReferrals: newProfile.total_referrals,
-                  referralEarnings: newProfile.referral_earnings,
-                  createdAt: newProfile.created_at,
-                },
-                isAuthenticated: true,
-                isLoading: false,
-              });
+                const { data: insertedProfile, error: insertError } = await supabase
+                  .from('profiles')
+                  .insert([newProfile])
+                  .select()
+                  .single();
+
+                if (insertError) {
+                  // If insert fails due to duplicate key, try to fetch the existing profile
+                  if (insertError.code === '23505') {
+                    const { data: existingProfile, error: fetchError } = await supabase
+                      .from('profiles')
+                      .select('*')
+                      .eq('id', data.user.id)
+                      .single();
+
+                    if (fetchError) throw fetchError;
+                    
+                    set({
+                      user: {
+                        id: existingProfile.id,
+                        name: existingProfile.name,
+                        email: existingProfile.email,
+                        phone: existingProfile.phone,
+                        walletBalance: existingProfile.wallet_balance,
+                        isAdmin: existingProfile.is_admin,
+                        referralCode: existingProfile.referral_code,
+                        referredBy: existingProfile.referred_by,
+                        totalReferrals: existingProfile.total_referrals,
+                        referralEarnings: existingProfile.referral_earnings,
+                        createdAt: existingProfile.created_at,
+                      },
+                      isAuthenticated: true,
+                      isLoading: false,
+                    });
+                  } else {
+                    throw insertError;
+                  }
+                } else {
+                  set({
+                    user: {
+                      id: insertedProfile.id,
+                      name: insertedProfile.name,
+                      email: insertedProfile.email,
+                      phone: insertedProfile.phone,
+                      walletBalance: insertedProfile.wallet_balance,
+                      isAdmin: insertedProfile.is_admin,
+                      referralCode: insertedProfile.referral_code,
+                      referredBy: insertedProfile.referred_by,
+                      totalReferrals: insertedProfile.total_referrals,
+                      referralEarnings: insertedProfile.referral_earnings,
+                      createdAt: insertedProfile.created_at,
+                    },
+                    isAuthenticated: true,
+                    isLoading: false,
+                  });
+                }
+              } else {
+                // For other errors, throw them
+                throw profileError;
+              }
             } else {
               set({
                 user: {
@@ -168,11 +210,45 @@ export const useAuthStore = create<AuthState>()(
               created_at: new Date().toISOString(),
             };
 
-            const { error: profileError } = await supabase
+            const { data: insertedProfile, error: profileError } = await supabase
               .from('profiles')
-              .insert([profile]);
+              .insert([profile])
+              .select()
+              .single();
 
-            if (profileError) throw profileError;
+            if (profileError) {
+              // If profile creation fails due to duplicate key, fetch existing profile
+              if (profileError.code === '23505') {
+                const { data: existingProfile, error: fetchError } = await supabase
+                  .from('profiles')
+                  .select('*')
+                  .eq('id', data.user.id)
+                  .single();
+
+                if (fetchError) throw fetchError;
+
+                set({
+                  user: {
+                    id: existingProfile.id,
+                    name: existingProfile.name,
+                    email: existingProfile.email,
+                    phone: existingProfile.phone,
+                    walletBalance: existingProfile.wallet_balance,
+                    isAdmin: existingProfile.is_admin,
+                    referralCode: existingProfile.referral_code,
+                    referredBy: existingProfile.referred_by,
+                    totalReferrals: existingProfile.total_referrals,
+                    referralEarnings: existingProfile.referral_earnings,
+                    createdAt: existingProfile.created_at,
+                  },
+                  isAuthenticated: true,
+                  isLoading: false,
+                });
+                return;
+              } else {
+                throw profileError;
+              }
+            }
 
             // Update referrer's total referrals count
             if (referrerProfile) {
@@ -201,17 +277,17 @@ export const useAuthStore = create<AuthState>()(
 
             set({
               user: {
-                id: profile.id,
-                name: profile.name,
-                email: profile.email,
-                phone: profile.phone,
-                walletBalance: profile.wallet_balance,
-                isAdmin: profile.is_admin,
-                referralCode: profile.referral_code,
-                referredBy: profile.referred_by,
-                totalReferrals: profile.total_referrals,
-                referralEarnings: profile.referral_earnings,
-                createdAt: profile.created_at,
+                id: insertedProfile.id,
+                name: insertedProfile.name,
+                email: insertedProfile.email,
+                phone: insertedProfile.phone,
+                walletBalance: insertedProfile.wallet_balance,
+                isAdmin: insertedProfile.is_admin,
+                referralCode: insertedProfile.referral_code,
+                referredBy: insertedProfile.referred_by,
+                totalReferrals: insertedProfile.total_referrals,
+                referralEarnings: insertedProfile.referral_earnings,
+                createdAt: insertedProfile.created_at,
               },
               isAuthenticated: true,
               isLoading: false,
@@ -337,24 +413,54 @@ export const useAuthStore = create<AuthState>()(
               created_at: new Date().toISOString(),
             };
 
-            const { error: insertError } = await supabase
+            const { data: insertedProfile, error: insertError } = await supabase
               .from('profiles')
-              .insert([newProfile]);
+              .insert([newProfile])
+              .select()
+              .single();
 
-            if (!insertError) {
+            if (insertError) {
+              // If insert fails due to duplicate key, try to fetch the existing profile
+              if (insertError.code === '23505') {
+                const { data: existingProfile, error: fetchError } = await supabase
+                  .from('profiles')
+                  .select('*')
+                  .eq('id', session.user.id)
+                  .single();
+
+                if (!fetchError && existingProfile) {
+                  set({
+                    user: {
+                      id: existingProfile.id,
+                      name: existingProfile.name,
+                      email: existingProfile.email,
+                      phone: existingProfile.phone,
+                      walletBalance: existingProfile.wallet_balance,
+                      isAdmin: existingProfile.is_admin,
+                      referralCode: existingProfile.referral_code,
+                      referredBy: existingProfile.referred_by,
+                      totalReferrals: existingProfile.total_referrals,
+                      referralEarnings: existingProfile.referral_earnings,
+                      createdAt: existingProfile.created_at,
+                    },
+                    isAuthenticated: true,
+                  });
+                }
+              }
+            } else if (insertedProfile) {
               set({
                 user: {
-                  id: newProfile.id,
-                  name: newProfile.name,
-                  email: newProfile.email,
-                  phone: newProfile.phone,
-                  walletBalance: newProfile.wallet_balance,
-                  isAdmin: newProfile.is_admin,
-                  referralCode: newProfile.referral_code,
-                  referredBy: newProfile.referred_by,
-                  totalReferrals: newProfile.total_referrals,
-                  referralEarnings: newProfile.referral_earnings,
-                  createdAt: newProfile.created_at,
+                  id: insertedProfile.id,
+                  name: insertedProfile.name,
+                  email: insertedProfile.email,
+                  phone: insertedProfile.phone,
+                  walletBalance: insertedProfile.wallet_balance,
+                  isAdmin: insertedProfile.is_admin,
+                  referralCode: insertedProfile.referral_code,
+                  referredBy: insertedProfile.referred_by,
+                  totalReferrals: insertedProfile.total_referrals,
+                  referralEarnings: insertedProfile.referral_earnings,
+                  createdAt: insertedProfile.created_at,
                 },
                 isAuthenticated: true,
               });
