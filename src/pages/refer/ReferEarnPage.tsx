@@ -15,7 +15,7 @@ type Referral = {
 
 const ReferEarnPage: React.FC = () => {
   const navigate = useNavigate();
-  const { user, refreshUserData } = useAuthStore();
+  const { user } = useAuthStore();
   const [copied, setCopied] = useState(false);
   const [referrals, setReferrals] = useState<Referral[]>([]);
   const [loading, setLoading] = useState(false);
@@ -31,12 +31,10 @@ const ReferEarnPage: React.FC = () => {
 
   useEffect(() => {
     if (user) {
-      // Refresh user data first to get latest referral stats
-      refreshUserData();
       fetchReferrals();
       fetchReferralStats();
     }
-  }, [user, refreshUserData]);
+  }, [user]);
 
   const fetchReferrals = async () => {
     if (!user) return;
@@ -85,7 +83,7 @@ const ReferEarnPage: React.FC = () => {
         }));
       }
       
-      // Get user's current stats from the refreshed user data
+      // Get user's current stats from the user object in the store
       if (user) {
         setReferralStats(prev => ({
           ...prev,
