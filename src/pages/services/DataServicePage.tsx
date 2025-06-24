@@ -15,25 +15,25 @@ const networkProviders = [
     value: 'MTN', 
     label: 'MTN',
     color: 'bg-yellow-500',
-    imageUrl: '/logos/mtn.png'
+    imageUrl: 'https://images.pexels.com/photos/5053740/pexels-photo-5053740.jpeg?auto=compress&cs=tinysrgb&w=300'
   },
   { 
     value: 'AIRTEL', 
     label: 'Airtel',
     color: 'bg-red-500',
-    imageUrl: '/logos/airtel.gif'
+    imageUrl: 'https://images.pexels.com/photos/5053835/pexels-photo-5053835.jpeg?auto=compress&cs=tinysrgb&w=300'
   },
   { 
     value: 'GLO', 
     label: 'Glo',
     color: 'bg-green-500',
-    imageUrl: '/logos/glo.jpeg'
+    imageUrl: 'https://images.pexels.com/photos/5053847/pexels-photo-5053847.jpeg?auto=compress&cs=tinysrgb&w=300'
   },
   { 
     value: '9MOBILE', 
     label: '9mobile',
     color: 'bg-teal-500',
-    imageUrl: '/logos/9-mobile.webp'
+    imageUrl: 'https://images.pexels.com/photos/5053856/pexels-photo-5053856.jpeg?auto=compress&cs=tinysrgb&w=300'
   },
 ];
 
@@ -367,7 +367,7 @@ const DataServicePage: React.FC = () => {
                   <img
                     src={provider.imageUrl}
                     alt={provider.label}
-                    className="w-full h-full object-contain"
+                    className="w-full h-full object-cover"
                   />
                 </div>
                 <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
