@@ -19,6 +19,7 @@ import TransactionsPage from './pages/transactions/TransactionsPage';
 import ReferEarnPage from './pages/refer/ReferEarnPage';
 import LoginPage from './pages/auth/LoginPage';
 import SignupPage from './pages/auth/SignupPage';
+import ResetPasswordPage from './pages/auth/ResetPasswordPage';
 import ComingSoonPage from './pages/ComingSoonPage';
 
 // Admin Pages
@@ -60,6 +61,11 @@ function App() {
         {/* Coming Soon Route */}
         <Route path="/coming-soon" element={<ComingSoonPage />} />
 
+        {/* Auth routes outside of main layout */}
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/signup" element={<SignupPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
+
         {/* Main App Routes */}
         <Route path="/" element={<Layout />}>
           {/* Show HomePage for non-authenticated users, Dashboard for authenticated users */}
@@ -79,9 +85,6 @@ function App() {
           <Route path="refer" element={<ReferEarnPage />} />
           <Route path="profile" element={<ProfilePage />} />
         </Route>
-        {/* Auth routes outside of main layout */}
-        <Route path="login" element={<LoginPage />} />
-        <Route path="signup" element={<SignupPage />} />
       </Routes>
     </Router>
   );
