@@ -34,7 +34,7 @@ const ReferEarnPage: React.FC = () => {
       fetchReferrals();
       fetchReferralStats();
     }
-  }, [user]);
+  }, [user?.id]); // Only depend on user.id to prevent infinite loops
 
   const fetchReferrals = async () => {
     if (!user) return;
