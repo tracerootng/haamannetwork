@@ -62,18 +62,18 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
         {/* Wishlist Button */}
         <button
           onClick={(e) => e.stopPropagation()}
-          className="absolute top-2 right-2 p-2 bg-white/80 backdrop-blur-sm rounded-full hover:bg-white transition-colors"
+          className="absolute top-2 right-2 w-8 h-8 bg-white/80 backdrop-blur-sm rounded-full hover:bg-white transition-colors flex items-center justify-center"
         >
-          <Heart size={16} className="text-gray-600 hover:text-red-500" />
+          <Heart size={14} className="text-gray-600 hover:text-red-500" />
         </button>
         
         {/* Quick Add to Cart */}
         {product.in_stock && (
           <button
             onClick={handleAddToCart}
-            className="absolute bottom-2 right-2 p-2 bg-[#0F9D58] text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-[#0d8a4f]"
+            className="absolute bottom-2 right-2 w-8 h-8 bg-[#0F9D58] text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-[#0d8a4f] flex items-center justify-center"
           >
-            <ShoppingCart size={16} />
+            <ShoppingCart size={14} />
           </button>
         )}
       </div>
