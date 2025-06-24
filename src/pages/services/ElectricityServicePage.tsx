@@ -13,6 +13,13 @@ const discos = [
   { value: 'eko', label: 'Eko Electric' },
   { value: 'ibadan', label: 'Ibadan Electric' },
   { value: 'abuja', label: 'Abuja Electric' },
+  { value: 'kano', label: 'Kano Electric' },
+  { value: 'enugu', label: 'Enugu Electric' },
+  { value: 'portharcourt', label: 'Port Harcourt Electric' },
+  { value: 'kaduna', label: 'Kaduna Electric' },
+  { value: 'jos', label: 'Jos Electric' },
+  { value: 'benin', label: 'Benin Electric' },
+  { value: 'yola', label: 'Yola Electric' },
 ];
 
 const meterTypes = [

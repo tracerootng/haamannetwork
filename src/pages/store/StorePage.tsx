@@ -71,7 +71,7 @@ const StorePage: React.FC = () => {
   }
 
   return (
-    <div className="bg-gray-50 dark:bg-gray-900">
+    <div className="bg-gray-50 dark:bg-gray-900 min-h-screen">
       {/* Header */}
       <div className="bg-white dark:bg-gray-800 px-4 py-4 border-b border-gray-200 dark:border-gray-700">
         <div className="flex justify-between items-center mb-4">
@@ -190,7 +190,7 @@ const StorePage: React.FC = () => {
           </div>
           
           {filteredProducts.length > 0 ? (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 overflow-y-auto">
               {filteredProducts.map((product) => (
                 <div key={product.id} className="relative">
                   <ProductCard product={product} />
