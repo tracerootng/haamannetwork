@@ -1,21 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  ArrowLeft, 
-  Search, 
-  Filter,
-  Bank,
-  Trash2,
-  AlertTriangle,
-  User,
-  Mail,
-  Phone,
-  CreditCard,
-  RefreshCw,
-  Eye,
-  EyeOff,
-  Shield
-} from 'lucide-react';
+import { ArrowLeft, Search, Filter, Ban as Bank, Trash2, AlertTriangle, User, Mail, Phone, CreditCard, RefreshCw, Eye, EyeOff, Shield } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../store/authStore';
 import { formatDate } from '../../lib/utils';
