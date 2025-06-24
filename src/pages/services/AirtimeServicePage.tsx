@@ -11,22 +11,26 @@ const networkProviders = [
   { 
     value: 'mtn', 
     label: 'MTN',
-    color: 'bg-yellow-500'
+    color: 'bg-yellow-500',
+    imageUrl: '/logos/mtn.png'
   },
   { 
     value: 'airtel', 
     label: 'Airtel',
-    color: 'bg-red-500'
+    color: 'bg-red-500',
+    imageUrl: '/logos/airtel.gif'
   },
   { 
     value: 'glo', 
     label: 'Glo',
-    color: 'bg-green-500'
+    color: 'bg-green-500',
+    imageUrl: '/logos/glo.jpeg'
   },
   { 
     value: '9mobile', 
     label: '9mobile',
-    color: 'bg-teal-500'
+    color: 'bg-teal-500',
+    imageUrl: '/logos/9-mobile.webp'
   },
 ];
 
@@ -217,10 +221,12 @@ const AirtimeServicePage: React.FC = () => {
                     : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800'
                 }`}
               >
-                <div className={`w-12 h-12 rounded-full flex items-center justify-center mb-2 ${provider.color}`}>
-                  <span className="text-white font-bold text-sm">
-                    {provider.label.charAt(0)}
-                  </span>
+                <div className="w-12 h-12 rounded-full flex items-center justify-center mb-2 overflow-hidden bg-white">
+                  <img
+                    src={provider.imageUrl}
+                    alt={provider.label}
+                    className="w-full h-full object-contain"
+                  />
                 </div>
                 <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
                   {provider.label}
