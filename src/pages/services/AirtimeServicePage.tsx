@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Phone, CheckCircle, XCircle, User } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import Card from '../../components/ui/Card';
@@ -6,6 +6,17 @@ import Button from '../../components/ui/Button';
 import { useAuthStore } from '../../store/authStore';
 import { serviceAPI } from '../../lib/serviceApi';
 import { formatCurrency } from '../../lib/utils';
+import { supabase } from '../../lib/supabase';
+
+type Beneficiary = {
+  id: string;
+  user_id: string;
+  name: string;
+  phone_number: string;
+  network: string;
+  type: 'airtime' | 'data';
+  created_at: string;
+};
 
 const networkProviders = [
   { 
@@ -43,10 +54,56 @@ const AirtimeServicePage: React.FC = () => {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [amount, setAmount] = useState('');
   const [saveAsBeneficiary, setSaveAsBeneficiary] = useState(false);
+  const [beneficiaryName, setBeneficiaryName] = useState('');
   const [serviceType, setServiceType] = useState('local');
   const [isSuccess, setIsSuccess] = useState<boolean | null>(null);
   const [transaction, setTransaction] = useState<any>(null);
   const [errorMessage, setErrorMessage] = useState('');
+  const [beneficiaries, setBeneficiaries] = useState<Beneficiary[]>([]);
+  const [showBeneficiaries, setShowBeneficiaries] = useState(false);
+  const [loadingBeneficiaries, setLoadingBeneficiaries] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      fetchBeneficiaries();
+    }
+  }, [user]);
+
+  const fetchBeneficiaries = async () => {
+    if (!user) return;
+    
+    setLoadingBeneficiaries(true);
+    try {
+      // In a real app, this would fetch from a beneficiaries table
+      // For now, we'll simulate with mock data
+      const mockBeneficiaries: Beneficiary[] = [
+        { 
+          id: '1', 
+          user_id: user.id, 
+          name: 'John Doe', 
+          phone_number: '08012345678', 
+          network: 'mtn', 
+          type: 'airtime',
+          created_at: new Date().toISOString()
+        },
+        { 
+          id: '2', 
+          user_id: user.id, 
+          name: 'Jane Smith', 
+          phone_number: '09087654321', 
+          network: 'airtel', 
+          type: 'airtime',
+          created_at: new Date().toISOString()
+        },
+      ];
+      
+      setBeneficiaries(mockBeneficiaries);
+    } catch (error) {
+      console.error('Error fetching beneficiaries:', error);
+    } finally {
+      setLoadingBeneficiaries(false);
+    }
+  };
 
   const handleContinue = () => {
     if (!selectedNetwork || !phoneNumber || !amount) {
@@ -84,6 +141,12 @@ const AirtimeServicePage: React.FC = () => {
       
       setTransaction(result);
       setIsSuccess(true);
+      
+      // Save beneficiary if requested
+      if (saveAsBeneficiary && beneficiaryName) {
+        await saveBeneficiary();
+      }
+      
       setStep(3);
     } catch (error: any) {
       console.error('Airtime purchase error:', error);
@@ -111,6 +174,33 @@ const AirtimeServicePage: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const saveBeneficiary = async () => {
+    if (!user || !selectedNetwork || !phoneNumber || !beneficiaryName) return;
+    
+    try {
+      // In a real app, this would save to a beneficiaries table
+      console.log('Saving beneficiary:', {
+        user_id: user.id,
+        name: beneficiaryName,
+        phone_number: phoneNumber,
+        network: selectedNetwork,
+        type: 'airtime'
+      });
+      
+      // Refresh beneficiaries list
+      await fetchBeneficiaries();
+    } catch (error) {
+      console.error('Error saving beneficiary:', error);
+    }
+  };
+
+  const selectBeneficiary = (beneficiary: Beneficiary) => {
+    setSelectedNetwork(beneficiary.network);
+    setPhoneNumber(beneficiary.phone_number);
+    setBeneficiaryName(beneficiary.name);
+    setShowBeneficiaries(false);
   };
 
   const renderComingSoon = () => (
@@ -205,6 +295,84 @@ const AirtimeServicePage: React.FC = () => {
           </button>
         </div>
 
+        {/* Beneficiaries Section */}
+        {beneficiaries.length > 0 && (
+          <div>
+            <div className="flex justify-between items-center mb-3">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Beneficiaries
+              </h2>
+              <button
+                onClick={() => setShowBeneficiaries(!showBeneficiaries)}
+                className="text-[#0F9D58] text-sm font-medium"
+              >
+                {showBeneficiaries ? 'Hide' : 'View All'}
+              </button>
+            </div>
+            
+            {showBeneficiaries ? (
+              <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 mb-4">
+                {loadingBeneficiaries ? (
+                  <div className="flex justify-center py-4">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#0F9D58]"></div>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {beneficiaries.map((beneficiary) => (
+                      <button
+                        key={beneficiary.id}
+                        onClick={() => selectBeneficiary(beneficiary)}
+                        className="w-full flex items-center p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                      >
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                          beneficiary.network === 'mtn' ? 'bg-yellow-100 text-yellow-600' :
+                          beneficiary.network === 'airtel' ? 'bg-red-100 text-red-600' :
+                          beneficiary.network === 'glo' ? 'bg-green-100 text-green-600' :
+                          beneficiary.network === '9mobile' ? 'bg-teal-100 text-teal-600' :
+                          'bg-gray-100 text-gray-600'
+                        }`}>
+                          <User size={18} />
+                        </div>
+                        
+                        <div className="ml-3 text-left">
+                          <p className="font-medium text-gray-900 dark:text-white">{beneficiary.name}</p>
+                          <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
+                            <span>{beneficiary.phone_number}</span>
+                            <span className="mx-1">•</span>
+                            <span className="capitalize">{beneficiary.network}</span>
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="flex overflow-x-auto space-x-3 pb-2 scrollbar-hide">
+                {beneficiaries.map((beneficiary) => (
+                  <button
+                    key={beneficiary.id}
+                    onClick={() => selectBeneficiary(beneficiary)}
+                    className="flex-shrink-0 flex flex-col items-center p-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-[#0F9D58] transition-colors"
+                  >
+                    <div className={`w-12 h-12 rounded-full flex items-center justify-center mb-2 ${
+                      beneficiary.network === 'mtn' ? 'bg-yellow-100 text-yellow-600' :
+                      beneficiary.network === 'airtel' ? 'bg-red-100 text-red-600' :
+                      beneficiary.network === 'glo' ? 'bg-green-100 text-green-600' :
+                      beneficiary.network === '9mobile' ? 'bg-teal-100 text-teal-600' :
+                      'bg-gray-100 text-gray-600'
+                    }`}>
+                      <User size={20} />
+                    </div>
+                    <p className="text-sm font-medium text-gray-900 dark:text-white">{beneficiary.name}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">{beneficiary.phone_number}</p>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Network Provider Selection */}
         <div>
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
@@ -280,29 +448,46 @@ const AirtimeServicePage: React.FC = () => {
         </div>
 
         {/* Save as Beneficiary Toggle */}
-        <div className="flex items-center justify-between py-2">
-          <span className="text-lg font-semibold text-gray-900 dark:text-white">
-            Save as Beneficiary
-          </span>
-          <button
-            onClick={() => setSaveAsBeneficiary(!saveAsBeneficiary)}
-            className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors ${
-              saveAsBeneficiary ? 'bg-[#0F9D58]' : 'bg-gray-300 dark:bg-gray-600'
-            }`}
-          >
-            <span
-              className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${
-                saveAsBeneficiary ? 'translate-x-7' : 'translate-x-1'
+        <div className="space-y-4">
+          <div className="flex items-center justify-between py-2">
+            <span className="text-lg font-semibold text-gray-900 dark:text-white">
+              Save as Beneficiary
+            </span>
+            <button
+              onClick={() => setSaveAsBeneficiary(!saveAsBeneficiary)}
+              className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors ${
+                saveAsBeneficiary ? 'bg-[#0F9D58]' : 'bg-gray-300 dark:bg-gray-600'
               }`}
-            />
-          </button>
+            >
+              <span
+                className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${
+                  saveAsBeneficiary ? 'translate-x-7' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+          
+          {saveAsBeneficiary && (
+            <div className="animate-fade-in">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Beneficiary Name
+              </label>
+              <input
+                type="text"
+                value={beneficiaryName}
+                onChange={(e) => setBeneficiaryName(e.target.value)}
+                placeholder="Enter a name for this beneficiary"
+                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#0F9D58] focus:border-transparent"
+              />
+            </div>
+          )}
         </div>
 
         {/* Continue Button */}
         <div className="p-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
           <Button
             onClick={handleContinue}
-            disabled={!selectedNetwork || !phoneNumber || !amount || Number(amount) < 100}
+            disabled={!selectedNetwork || !phoneNumber || !amount || Number(amount) < 100 || (saveAsBeneficiary && !beneficiaryName)}
             className="w-full bg-[#0F9D58] hover:bg-[#0d8a4f] text-white py-4 rounded-xl font-semibold text-lg disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Continue
@@ -346,6 +531,13 @@ const AirtimeServicePage: React.FC = () => {
               <span className="text-gray-600 dark:text-gray-400">Amount</span>
               <span className="font-medium text-gray-900 dark:text-white">{formatCurrency(Number(amount))}</span>
             </div>
+            
+            {saveAsBeneficiary && (
+              <div className="flex justify-between py-3 border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">Save as Beneficiary</span>
+                <span className="font-medium text-gray-900 dark:text-white">{beneficiaryName}</span>
+              </div>
+            )}
             
             <div className="flex justify-between py-3">
               <span className="text-gray-600 dark:text-gray-400">Wallet Balance</span>
@@ -411,6 +603,13 @@ const AirtimeServicePage: React.FC = () => {
                 <span className="text-gray-600 dark:text-gray-400">Amount</span>
                 <span className="font-medium text-gray-900 dark:text-white">{formatCurrency(Number(amount))}</span>
               </div>
+              
+              {saveAsBeneficiary && (
+                <div className="flex justify-between py-2">
+                  <span className="text-gray-600 dark:text-gray-400">Saved Beneficiary</span>
+                  <span className="font-medium text-gray-900 dark:text-white">{beneficiaryName}</span>
+                </div>
+              )}
             </div>
             
             <div className="flex space-x-3">
@@ -429,6 +628,7 @@ const AirtimeServicePage: React.FC = () => {
                   setPhoneNumber('');
                   setAmount('');
                   setSaveAsBeneficiary(false);
+                  setBeneficiaryName('');
                   setIsSuccess(null);
                   setTransaction(null);
                   setErrorMessage('');

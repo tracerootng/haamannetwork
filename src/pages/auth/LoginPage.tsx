@@ -2,6 +2,9 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Mail, Lock, Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
+import Card from '../../components/ui/Card';
+import Button from '../../components/ui/Button';
+import Input from '../../components/ui/Input';
 
 const LoginPage: React.FC = () => {
   const navigate = useNavigate();
@@ -12,6 +15,10 @@ const LoginPage: React.FC = () => {
   });
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const [resetPasswordMode, setResetPasswordMode] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetSuccess, setResetSuccess] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -31,6 +38,26 @@ const LoginPage: React.FC = () => {
     }
   };
 
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setResetLoading(true);
+    setError('');
+
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+
+      if (error) throw error;
+      
+      setResetSuccess(true);
+    } catch (error: any) {
+      setError(error.message);
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
@@ -43,13 +70,17 @@ const LoginPage: React.FC = () => {
 
         {/* Header */}
         <div className="text-center">
-          <h2 className="text-3xl font-bold text-gray-900 mb-2">Welcome Back</h2>
-          <p className="text-gray-600">Sign in to continue</p>
+          <h2 className="text-3xl font-bold text-gray-900 mb-2">
+            {resetPasswordMode ? 'Reset Password' : 'Welcome Back'}
+          </h2>
+          <p className="text-gray-600">
+            {resetPasswordMode ? 'Enter your email to reset your password' : 'Sign in to continue'}
+          </p>
         </div>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-white py-8 px-6 shadow-xl rounded-2xl sm:px-10">
+        <Card className="p-6 sm:p-8">
           {error && (
             <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3">
               <AlertCircle className="text-red-500" size={20} />
@@ -57,94 +88,137 @@ const LoginPage: React.FC = () => {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Email Field */}
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-                Email
-              </label>
-              <div className="relative">
-                <input
-                  id="email"
-                  name="email"
-                  type="email"
-                  autoComplete="email"
-                  required
-                  value={formData.email}
-                  onChange={handleChange}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0F9D58] focus:border-transparent transition-all duration-200"
-                  placeholder="Enter your email"
-                />
-              </div>
-            </div>
+          {resetPasswordMode ? (
+            <>
+              {resetSuccess ? (
+                <div className="text-center py-4">
+                  <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <AlertCircle className="text-green-500" size={24} />
+                  </div>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">Check your email</h3>
+                  <p className="text-gray-600 mb-6">
+                    We've sent a password reset link to <strong>{resetEmail}</strong>. 
+                    Please check your inbox and follow the instructions.
+                  </p>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setResetPasswordMode(false);
+                      setResetSuccess(false);
+                    }}
+                    fullWidth
+                  >
+                    Back to Login
+                  </Button>
+                </div>
+              ) : (
+                <form onSubmit={handleResetPassword} className="space-y-6">
+                  <Input
+                    label="Email Address"
+                    name="email"
+                    type="email"
+                    value={resetEmail}
+                    onChange={(e) => setResetEmail(e.target.value)}
+                    leftIcon={<Mail size={16} />}
+                    required
+                  />
 
-            {/* Password Field */}
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
-                Password
-              </label>
-              <div className="relative">
-                <input
-                  id="password"
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    isLoading={resetLoading}
+                    fullWidth
+                  >
+                    Send Reset Link
+                  </Button>
+
+                  <div className="text-center">
+                    <Button
+                      variant="link"
+                      onClick={() => setResetPasswordMode(false)}
+                    >
+                      Back to Login
+                    </Button>
+                  </div>
+                </form>
+              )}
+            </>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Email Field */}
+              <Input
+                label="Email"
+                name="email"
+                type="email"
+                autoComplete="email"
+                required
+                value={formData.email}
+                onChange={handleChange}
+                leftIcon={<Mail size={16} />}
+                placeholder="Enter your email"
+              />
+
+              {/* Password Field */}
+              <div>
+                <Input
+                  label="Password"
                   name="password"
                   type={showPassword ? 'text' : 'password'}
                   autoComplete="current-password"
                   required
                   value={formData.password}
                   onChange={handleChange}
-                  className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0F9D58] focus:border-transparent transition-all duration-200"
+                  leftIcon={<Lock size={16} />}
+                  rightIcon={
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="text-gray-400 hover:text-gray-600"
+                    >
+                      {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  }
                   placeholder="Enter your password"
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-gray-600"
-                >
-                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-                </button>
               </div>
-            </div>
 
-            {/* Login Button */}
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full bg-[#0F9D58] text-white py-3 px-4 rounded-xl font-semibold hover:bg-[#0d8a4f] focus:outline-none focus:ring-2 focus:ring-[#0F9D58] focus:ring-offset-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isLoading ? (
-                <div className="flex items-center justify-center">
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-                  Signing in...
-                </div>
-              ) : (
-                'Login'
-              )}
-            </button>
-
-            {/* Reset Password Link */}
-            <div className="text-center">
-              <Link
-                to="/reset-password"
-                className="text-[#0F9D58] hover:text-[#0d8a4f] font-medium transition-colors duration-200"
+              {/* Login Button */}
+              <Button
+                type="submit"
+                variant="primary"
+                isLoading={isLoading}
+                fullWidth
               >
-                Reset Password
-              </Link>
-            </div>
-          </form>
+                {isLoading ? 'Signing in...' : 'Login'}
+              </Button>
+
+              {/* Reset Password Link */}
+              <div className="text-center">
+                <Button
+                  variant="link"
+                  onClick={() => setResetPasswordMode(true)}
+                >
+                  Reset Password
+                </Button>
+              </div>
+            </form>
+          )}
 
           {/* Sign Up Link */}
-          <div className="mt-8 text-center">
-            <p className="text-gray-600">
-              Don't have an account?{' '}
-              <Link
-                to="/signup"
-                className="text-[#0F9D58] hover:text-[#0d8a4f] font-semibold transition-colors duration-200"
-              >
-                Sign up
-              </Link>
-            </p>
-          </div>
-        </div>
+          {!resetPasswordMode && (
+            <div className="mt-8 text-center">
+              <p className="text-gray-600">
+                Don't have an account?{' '}
+                <Link
+                  to="/signup"
+                  className="text-[#0F9D58] hover:text-[#0d8a4f] font-semibold transition-colors duration-200"
+                >
+                  Sign up
+                </Link>
+              </p>
+            </div>
+          )}
+        </Card>
       </div>
     </div>
   );

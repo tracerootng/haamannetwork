@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowUpRight, ArrowDownRight, Download, Search, Filter } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, Download, Search, Filter, BarChart2, Trophy, Users, Calendar, ChevronDown, ChevronUp } from 'lucide-react';
 import Card from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
@@ -21,6 +21,40 @@ type Transaction = {
   created_at: string;
 };
 
+type TransactionStats = {
+  totalSpent: number;
+  dailyAverage: number;
+  weeklyAverage: number;
+  monthlyAverage: number;
+  networkBreakdown: {
+    [key: string]: {
+      count: number;
+      amount: number;
+    }
+  };
+  timeBreakdown: {
+    daily: number;
+    weekly: number;
+    monthly: number;
+  };
+};
+
+type LeaderboardEntry = {
+  user_id: string;
+  name: string;
+  network: string;
+  total_amount: number;
+  rank: number;
+};
+
+type Beneficiary = {
+  id: string;
+  name: string;
+  phoneNumber: string;
+  network: string;
+  type: 'airtime' | 'data';
+};
+
 const transactionTypes = [
   { value: 'all', label: 'All Types' },
   { value: 'wallet_funding', label: 'Wallet Funding' },
@@ -36,6 +70,21 @@ const statusOptions = [
   { value: 'success', label: 'Success' },
   { value: 'pending', label: 'Pending' },
   { value: 'failed', label: 'Failed' },
+];
+
+const timeRangeOptions = [
+  { value: '7days', label: 'Last 7 Days' },
+  { value: '30days', label: 'Last 30 Days' },
+  { value: '90days', label: 'Last 90 Days' },
+  { value: 'all', label: 'All Time' },
+];
+
+const networkOptions = [
+  { value: 'all', label: 'All Networks' },
+  { value: 'mtn', label: 'MTN' },
+  { value: 'airtel', label: 'Airtel' },
+  { value: 'glo', label: 'Glo' },
+  { value: '9mobile', label: '9mobile' },
 ];
 
 const getTransactionLabel = (type: string, details: any) => {
@@ -119,10 +168,33 @@ const TransactionsPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedType, setSelectedType] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState('all');
+  const [timeRange, setTimeRange] = useState('30days');
+  const [selectedNetwork, setSelectedNetwork] = useState('all');
+  
+  const [showStats, setShowStats] = useState(false);
+  const [showLeaderboard, setShowLeaderboard] = useState(false);
+  const [showBeneficiaries, setShowBeneficiaries] = useState(false);
+  const [transactionStats, setTransactionStats] = useState<TransactionStats>({
+    totalSpent: 0,
+    dailyAverage: 0,
+    weeklyAverage: 0,
+    monthlyAverage: 0,
+    networkBreakdown: {},
+    timeBreakdown: {
+      daily: 0,
+      weekly: 0,
+      monthly: 0
+    }
+  });
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [beneficiaries, setBeneficiaries] = useState<Beneficiary[]>([]);
+  const [loadingStats, setLoadingStats] = useState(false);
+  const [loadingLeaderboard, setLoadingLeaderboard] = useState(false);
 
   useEffect(() => {
     if (isAuthenticated && user) {
       fetchTransactions();
+      fetchBeneficiaries();
     }
   }, [isAuthenticated, user]);
 
@@ -138,10 +210,116 @@ const TransactionsPage: React.FC = () => {
 
       if (error) throw error;
       setTransactions(data || []);
+      
+      // Calculate stats after fetching transactions
+      calculateStats(data || []);
     } catch (error) {
       console.error('Error fetching transactions:', error);
     } finally {
       setLoading(false);
+    }
+  };
+  
+  const fetchBeneficiaries = async () => {
+    // In a real app, this would fetch from a beneficiaries table
+    // For now, we'll simulate with mock data
+    const mockBeneficiaries: Beneficiary[] = [
+      { id: '1', name: 'John Doe', phoneNumber: '08012345678', network: 'mtn', type: 'airtime' },
+      { id: '2', name: 'Jane Smith', phoneNumber: '09087654321', network: 'airtel', type: 'data' },
+      { id: '3', name: 'Mike Johnson', phoneNumber: '08123456789', network: 'glo', type: 'airtime' },
+    ];
+    
+    setBeneficiaries(mockBeneficiaries);
+  };
+  
+  const calculateStats = (transactionData: Transaction[]) => {
+    if (!transactionData.length) return;
+    
+    // Filter only successful transactions
+    const successfulTransactions = transactionData.filter(t => t.status === 'success');
+    
+    // Calculate total spent on services (excluding wallet funding)
+    const serviceTransactions = successfulTransactions.filter(t => isDebit(t.type));
+    const totalSpent = serviceTransactions.reduce((sum, t) => sum + Number(t.amount), 0);
+    
+    // Network breakdown
+    const networkBreakdown: {[key: string]: {count: number, amount: number}} = {};
+    
+    serviceTransactions.forEach(t => {
+      const network = t.details?.network?.toLowerCase() || 'unknown';
+      if (!networkBreakdown[network]) {
+        networkBreakdown[network] = { count: 0, amount: 0 };
+      }
+      networkBreakdown[network].count += 1;
+      networkBreakdown[network].amount += Number(t.amount);
+    });
+    
+    // Time-based calculations
+    const now = new Date();
+    const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const oneMonthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    
+    const dailyTransactions = serviceTransactions.filter(t => new Date(t.created_at) >= oneDayAgo);
+    const weeklyTransactions = serviceTransactions.filter(t => new Date(t.created_at) >= oneWeekAgo);
+    const monthlyTransactions = serviceTransactions.filter(t => new Date(t.created_at) >= oneMonthAgo);
+    
+    const dailyTotal = dailyTransactions.reduce((sum, t) => sum + Number(t.amount), 0);
+    const weeklyTotal = weeklyTransactions.reduce((sum, t) => sum + Number(t.amount), 0);
+    const monthlyTotal = monthlyTransactions.reduce((sum, t) => sum + Number(t.amount), 0);
+    
+    // Calculate averages
+    const dailyAverage = serviceTransactions.length > 0 ? totalSpent / (serviceTransactions.length / (serviceTransactions.length / 30)) : 0;
+    const weeklyAverage = serviceTransactions.length > 0 ? totalSpent / (serviceTransactions.length / (serviceTransactions.length / 4)) : 0;
+    const monthlyAverage = serviceTransactions.length > 0 ? totalSpent / (serviceTransactions.length / (serviceTransactions.length / 1)) : 0;
+    
+    setTransactionStats({
+      totalSpent,
+      dailyAverage,
+      weeklyAverage,
+      monthlyAverage,
+      networkBreakdown,
+      timeBreakdown: {
+        daily: dailyTotal,
+        weekly: weeklyTotal,
+        monthly: monthlyTotal
+      }
+    });
+  };
+  
+  const fetchLeaderboard = async () => {
+    setLoadingLeaderboard(true);
+    try {
+      // In a real app, this would be a database query
+      // For now, we'll simulate with mock data
+      const mockLeaderboard: LeaderboardEntry[] = [
+        { user_id: '1', name: 'John D.', network: 'mtn', total_amount: 25000, rank: 1 },
+        { user_id: '2', name: 'Sarah M.', network: 'airtel', total_amount: 18500, rank: 2 },
+        { user_id: '3', name: 'Michael T.', network: 'glo', total_amount: 15200, rank: 3 },
+        { user_id: '4', name: 'Emma R.', network: 'mtn', total_amount: 12800, rank: 4 },
+        { user_id: '5', name: 'David K.', network: '9mobile', total_amount: 10500, rank: 5 },
+      ];
+      
+      // Add current user if they're in the top users
+      const currentUserRank = Math.floor(Math.random() * 20) + 1; // Random rank for demo
+      if (currentUserRank <= 10) {
+        mockLeaderboard.push({
+          user_id: user?.id || '',
+          name: `${user?.name} (You)`,
+          network: 'mtn',
+          total_amount: Math.floor(Math.random() * 10000) + 5000,
+          rank: currentUserRank
+        });
+        
+        // Sort by rank
+        mockLeaderboard.sort((a, b) => a.rank - b.rank);
+      }
+      
+      setLeaderboard(mockLeaderboard);
+    } catch (error) {
+      console.error('Error fetching leaderboard:', error);
+    } finally {
+      setLoadingLeaderboard(false);
     }
   };
   
@@ -153,8 +331,52 @@ const TransactionsPage: React.FC = () => {
     const matchesType = selectedType === 'all' || transaction.type === selectedType;
     const matchesStatus = selectedStatus === 'all' || transaction.status === selectedStatus;
     
-    return matchesSearch && matchesType && matchesStatus;
+    // Filter by network if applicable
+    const matchesNetwork = selectedNetwork === 'all' || 
+      (transaction.details?.network?.toLowerCase() === selectedNetwork);
+    
+    // Filter by time range
+    let matchesTimeRange = true;
+    if (timeRange !== 'all') {
+      const transactionDate = new Date(transaction.created_at);
+      const now = new Date();
+      
+      if (timeRange === '7days') {
+        const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        matchesTimeRange = transactionDate >= sevenDaysAgo;
+      } else if (timeRange === '30days') {
+        const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        matchesTimeRange = transactionDate >= thirtyDaysAgo;
+      } else if (timeRange === '90days') {
+        const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+        matchesTimeRange = transactionDate >= ninetyDaysAgo;
+      }
+    }
+    
+    return matchesSearch && matchesType && matchesStatus && matchesNetwork && matchesTimeRange;
   });
+
+  const toggleStats = () => {
+    setShowStats(!showStats);
+    if (!showStats && !loadingStats) {
+      setLoadingStats(true);
+      // Simulate loading stats
+      setTimeout(() => {
+        setLoadingStats(false);
+      }, 800);
+    }
+  };
+  
+  const toggleLeaderboard = () => {
+    setShowLeaderboard(!showLeaderboard);
+    if (!showLeaderboard && !loadingLeaderboard) {
+      fetchLeaderboard();
+    }
+  };
+  
+  const toggleBeneficiaries = () => {
+    setShowBeneficiaries(!showBeneficiaries);
+  };
 
   if (!isAuthenticated) {
     return (
@@ -185,6 +407,326 @@ const TransactionsPage: React.FC = () => {
   return (
     <div className="py-4 sm:py-6 animate-fade-in max-w-4xl mx-auto px-4 pb-20">
       <h1 className="text-xl sm:text-2xl font-semibold mb-4 sm:mb-6">Transaction History</h1>
+      
+      {/* Action Buttons */}
+      <div className="flex flex-wrap gap-3 mb-4">
+        <Button 
+          variant={showStats ? "primary" : "outline"} 
+          onClick={toggleStats}
+          icon={<BarChart2 size={16} />}
+          className="text-sm"
+        >
+          Statistics
+        </Button>
+        
+        <Button 
+          variant={showLeaderboard ? "primary" : "outline"} 
+          onClick={toggleLeaderboard}
+          icon={<Trophy size={16} />}
+          className="text-sm"
+        >
+          Leaderboard
+        </Button>
+        
+        <Button 
+          variant={showBeneficiaries ? "primary" : "outline"} 
+          onClick={toggleBeneficiaries}
+          icon={<Users size={16} />}
+          className="text-sm"
+        >
+          Beneficiaries
+        </Button>
+      </div>
+      
+      {/* Statistics Section */}
+      {showStats && (
+        <Card className="mb-6 p-4 sm:p-6 animate-slide-up">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold flex items-center">
+              <BarChart2 className="mr-2 text-[#0F9D58]" size={20} />
+              Transaction Statistics
+            </h2>
+            <Select
+              options={timeRangeOptions}
+              value={timeRange}
+              onChange={(e) => setTimeRange(e.target.value)}
+              className="w-40"
+            />
+          </div>
+          
+          {loadingStats ? (
+            <div className="flex justify-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#0F9D58]"></div>
+            </div>
+          ) : (
+            <>
+              {/* Overview Stats */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+                <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3 text-center">
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Total Spent</p>
+                  <p className="text-lg font-bold text-[#0F9D58]">{formatCurrency(transactionStats.totalSpent)}</p>
+                </div>
+                
+                <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3 text-center">
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Daily Avg</p>
+                  <p className="text-lg font-bold text-[#0F9D58]">{formatCurrency(transactionStats.timeBreakdown.daily)}</p>
+                </div>
+                
+                <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3 text-center">
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Weekly Avg</p>
+                  <p className="text-lg font-bold text-[#0F9D58]">{formatCurrency(transactionStats.timeBreakdown.weekly / 7)}</p>
+                </div>
+                
+                <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3 text-center">
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Monthly Avg</p>
+                  <p className="text-lg font-bold text-[#0F9D58]">{formatCurrency(transactionStats.timeBreakdown.monthly / 30)}</p>
+                </div>
+              </div>
+              
+              {/* Network Breakdown */}
+              <h3 className="text-md font-semibold mb-3">Network Breakdown</h3>
+              <div className="space-y-3 mb-6">
+                {Object.entries(transactionStats.networkBreakdown).map(([network, data]) => (
+                  <div key={network} className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
+                    <div className="flex justify-between items-center mb-1">
+                      <div className="flex items-center">
+                        <div className={`w-3 h-3 rounded-full ${
+                          network === 'mtn' ? 'bg-yellow-500' :
+                          network === 'airtel' ? 'bg-red-500' :
+                          network === 'glo' ? 'bg-green-500' :
+                          network === '9mobile' ? 'bg-teal-500' :
+                          'bg-gray-500'
+                        } mr-2`}></div>
+                        <span className="font-medium capitalize">{network}</span>
+                      </div>
+                      <span className="text-sm">{data.count} transactions</span>
+                    </div>
+                    <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2.5">
+                      <div 
+                        className={`h-2.5 rounded-full ${
+                          network === 'mtn' ? 'bg-yellow-500' :
+                          network === 'airtel' ? 'bg-red-500' :
+                          network === 'glo' ? 'bg-green-500' :
+                          network === '9mobile' ? 'bg-teal-500' :
+                          'bg-gray-500'
+                        }`}
+                        style={{ 
+                          width: `${Math.min(100, (data.amount / transactionStats.totalSpent) * 100)}%` 
+                        }}
+                      ></div>
+                    </div>
+                    <div className="flex justify-between items-center mt-1">
+                      <span className="text-xs text-gray-500 dark:text-gray-400">
+                        {((data.amount / transactionStats.totalSpent) * 100).toFixed(1)}% of total
+                      </span>
+                      <span className="text-sm font-medium">{formatCurrency(data.amount)}</span>
+                    </div>
+                  </div>
+                ))}
+                
+                {Object.keys(transactionStats.networkBreakdown).length === 0 && (
+                  <div className="text-center py-4 text-gray-500 dark:text-gray-400">
+                    No network data available for the selected time period.
+                  </div>
+                )}
+              </div>
+              
+              {/* Most Frequent Transactions */}
+              <h3 className="text-md font-semibold mb-3">Most Frequent Transactions</h3>
+              <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-medium">Data Bundles</span>
+                  <Badge variant="success">Most Used</Badge>
+                </div>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">
+                  You purchase data bundles more frequently than any other service.
+                </p>
+                <p className="text-sm">
+                  <span className="font-medium">Favorite Plan:</span> MTN 1GB SME2 - 30 days
+                </p>
+              </div>
+            </>
+          )}
+        </Card>
+      )}
+      
+      {/* Leaderboard Section */}
+      {showLeaderboard && (
+        <Card className="mb-6 p-4 sm:p-6 animate-slide-up">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold flex items-center">
+              <Trophy className="mr-2 text-[#0F9D58]" size={20} />
+              Data Usage Leaderboard
+            </h2>
+            <Select
+              options={networkOptions}
+              value={selectedNetwork}
+              onChange={(e) => setSelectedNetwork(e.target.value)}
+              className="w-40"
+            />
+          </div>
+          
+          {loadingLeaderboard ? (
+            <div className="flex justify-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#0F9D58]"></div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {leaderboard.map((entry, index) => (
+                <div 
+                  key={entry.user_id} 
+                  className={`relative rounded-lg p-4 ${
+                    index === 0 
+                      ? 'bg-gradient-to-r from-yellow-50 to-yellow-100 dark:from-yellow-900/20 dark:to-yellow-800/20 border border-yellow-200 dark:border-yellow-800' 
+                      : index === 1
+                      ? 'bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800/50 dark:to-gray-700/50 border border-gray-200 dark:border-gray-700'
+                      : index === 2
+                      ? 'bg-gradient-to-r from-amber-50 to-amber-100 dark:from-amber-900/20 dark:to-amber-800/20 border border-amber-200 dark:border-amber-800'
+                      : 'bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600'
+                  }`}
+                >
+                  {/* Crown for top user */}
+                  {index === 0 && (
+                    <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                      <div className="text-yellow-500 text-2xl">👑</div>
+                    </div>
+                  )}
+                  
+                  <div className="flex items-center">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-white ${
+                      index === 0 ? 'bg-yellow-500' : 
+                      index === 1 ? 'bg-gray-400' : 
+                      index === 2 ? 'bg-amber-600' : 
+                      'bg-gray-500'
+                    }`}>
+                      {entry.rank}
+                    </div>
+                    
+                    <div className="ml-3 flex-1">
+                      <div className="flex items-center">
+                        <p className="font-medium text-gray-900 dark:text-white">
+                          {entry.name}
+                        </p>
+                        {entry.name.includes('(You)') && (
+                          <Badge variant="success" className="ml-2 text-xs">You</Badge>
+                        )}
+                      </div>
+                      <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
+                        <div className={`w-2 h-2 rounded-full ${
+                          entry.network === 'mtn' ? 'bg-yellow-500' :
+                          entry.network === 'airtel' ? 'bg-red-500' :
+                          entry.network === 'glo' ? 'bg-green-500' :
+                          entry.network === '9mobile' ? 'bg-teal-500' :
+                          'bg-gray-500'
+                        } mr-1`}></div>
+                        <span className="capitalize">{entry.network}</span>
+                      </div>
+                    </div>
+                    
+                    <div className="text-right">
+                      <p className="font-bold text-[#0F9D58]">{formatCurrency(entry.total_amount)}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">total spent</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              
+              {leaderboard.length === 0 && (
+                <div className="text-center py-6 text-gray-500 dark:text-gray-400">
+                  No leaderboard data available for the selected network.
+                </div>
+              )}
+              
+              <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800 mt-4">
+                <div className="flex items-start">
+                  <Trophy className="text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" size={16} />
+                  <div className="ml-3">
+                    <p className="text-sm text-blue-800 dark:text-blue-200">
+                      The leaderboard shows the top users based on their total spending on data bundles. 
+                      Privacy is important to us, so only partial names are displayed.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </Card>
+      )}
+      
+      {/* Beneficiaries Section */}
+      {showBeneficiaries && (
+        <Card className="mb-6 p-4 sm:p-6 animate-slide-up">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold flex items-center">
+              <Users className="mr-2 text-[#0F9D58]" size={20} />
+              Saved Beneficiaries
+            </h2>
+            <Button 
+              variant="outline" 
+              size="sm"
+              className="text-xs"
+              icon={<Calendar size={14} />}
+            >
+              Add New
+            </Button>
+          </div>
+          
+          {beneficiaries.length > 0 ? (
+            <div className="space-y-3">
+              {beneficiaries.map((beneficiary) => (
+                <div key={beneficiary.id} className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 flex items-center justify-between">
+                  <div className="flex items-center">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                      beneficiary.network === 'mtn' ? 'bg-yellow-100 text-yellow-600' :
+                      beneficiary.network === 'airtel' ? 'bg-red-100 text-red-600' :
+                      beneficiary.network === 'glo' ? 'bg-green-100 text-green-600' :
+                      beneficiary.network === '9mobile' ? 'bg-teal-100 text-teal-600' :
+                      'bg-gray-100 text-gray-600'
+                    }`}>
+                      <Users size={18} />
+                    </div>
+                    
+                    <div className="ml-3">
+                      <p className="font-medium text-gray-900 dark:text-white">{beneficiary.name}</p>
+                      <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
+                        <span>{beneficiary.phoneNumber}</span>
+                        <span className="mx-1">•</span>
+                        <span className="capitalize">{beneficiary.network}</span>
+                        <Badge 
+                          variant={beneficiary.type === 'airtime' ? 'warning' : 'success'} 
+                          className="ml-2 text-xs"
+                        >
+                          {beneficiary.type}
+                        </Badge>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="flex space-x-2">
+                    <Button variant="outline" size="sm" className="text-xs px-2 py-1">
+                      Use
+                    </Button>
+                    <Button variant="outline" size="sm" className="text-xs px-2 py-1 text-red-500 border-red-200">
+                      Delete
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-6 bg-gray-50 dark:bg-gray-700 rounded-lg">
+              <Users className="mx-auto h-12 w-12 text-gray-400 mb-3" />
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No beneficiaries yet</h3>
+              <p className="text-gray-600 dark:text-gray-400 mb-4">
+                Save your frequent contacts for quick transactions
+              </p>
+              <Button variant="primary" size="sm">
+                Add Beneficiary
+              </Button>
+            </div>
+          )}
+        </Card>
+      )}
       
       <Card className="mb-4 sm:mb-6 p-4">
         <div className="space-y-4">
