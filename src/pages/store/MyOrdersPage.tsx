@@ -63,6 +63,7 @@ const MyOrdersPage: React.FC = () => {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [trackingEvents, setTrackingEvents] = useState<TrackingEvent[]>([]);
   const [showOrderModal, setShowOrderModal] = useState(false);
+  const [showTrackingModal, setShowTrackingModal] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -115,6 +116,18 @@ const MyOrdersPage: React.FC = () => {
 
   const handleRefresh = () => {
     fetchOrders(true);
+  };
+
+  const handleViewOrder = (order: Order) => {
+    setSelectedOrder(order);
+    fetchTrackingEvents(order.id);
+    setShowOrderModal(true);
+  };
+
+  const handleTrackOrder = (order: Order) => {
+    setSelectedOrder(order);
+    fetchTrackingEvents(order.id);
+    setShowTrackingModal(true);
   };
 
   const getStatusIcon = (status: string) => {
@@ -185,12 +198,6 @@ const MyOrdersPage: React.FC = () => {
       const diffDays = Math.ceil(diffHours / 24);
       return `Expected in ${diffDays} day${diffDays > 1 ? 's' : ''}`;
     }
-  };
-
-  const handleViewOrder = (order: Order) => {
-    setSelectedOrder(order);
-    fetchTrackingEvents(order.id);
-    setShowOrderModal(true);
   };
 
   if (loading) {
@@ -348,6 +355,7 @@ const MyOrdersPage: React.FC = () => {
                     <Button
                       variant="outline"
                       size="sm"
+                      onClick={() => handleTrackOrder(order)}
                       icon={<MapPin size={16} />}
                     >
                       Track Order
@@ -547,6 +555,95 @@ const MyOrdersPage: React.FC = () => {
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Order Tracking Modal */}
+      {showTrackingModal && selectedOrder && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white">Track Order</h2>
+                <button
+                  onClick={() => setShowTrackingModal(false)}
+                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                >
+                  <XCircle size={24} />
+                </button>
+              </div>
+            </div>
+            
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Order Number</p>
+                  <p className="font-medium text-gray-900 dark:text-white">{selectedOrder.tracking_number}</p>
+                </div>
+                <Badge variant={getStatusColor(selectedOrder.status) as any}>
+                  {selectedOrder.status.toUpperCase()}
+                </Badge>
+              </div>
+              
+              {trackingEvents.length > 0 ? (
+                <div className="relative">
+                  {/* Timeline line */}
+                  <div className="absolute left-4 top-2 bottom-2 w-0.5 bg-gray-200 dark:bg-gray-700"></div>
+                  
+                  {/* Timeline events */}
+                  <div className="space-y-8">
+                    {trackingEvents.map((event, index) => (
+                      <div key={event.id} className="relative pl-10">
+                        {/* Timeline dot */}
+                        <div className="absolute left-0 top-1 w-8 h-8 rounded-full flex items-center justify-center bg-white dark:bg-gray-800 z-10">
+                          {getStatusIcon(event.status)}
+                        </div>
+                        
+                        <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                          <div className="flex items-center justify-between mb-2">
+                            <h4 className="font-medium text-gray-900 dark:text-white">{event.title}</h4>
+                            <span className="text-xs text-gray-500 dark:text-gray-400">
+                              {formatDate(event.event_date)}
+                            </span>
+                          </div>
+                          {event.description && (
+                            <p className="text-sm text-gray-600 dark:text-gray-400">
+                              {event.description}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <Clock className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No tracking events yet</h3>
+                  <p className="text-gray-600 dark:text-gray-400">
+                    Tracking information will appear here once your order is processed.
+                  </p>
+                </div>
+              )}
+              
+              <div className="mt-6">
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                  Estimated Delivery Date:
+                </p>
+                <p className="font-medium text-gray-900 dark:text-white">
+                  {formatDate(selectedOrder.estimated_delivery_date)}
+                </p>
+              </div>
+              
+              <Button
+                variant="primary"
+                onClick={() => setShowTrackingModal(false)}
+                className="w-full mt-6"
+              >
+                Close
+              </Button>
             </div>
           </div>
         </div>
