@@ -72,8 +72,7 @@ serve(async (req) => {
       tx_ref, 
       amount, 
       currency, 
-      customer: { email },
-      account_number // Add this line to extract the account number
+      customer: { email }
     } = payload.data;
 
     // Check if this transaction has already been processed (idempotency)
@@ -99,24 +98,39 @@ serve(async (req) => {
       );
     }
 
-    // Ensure account_number is present in the payload
-    if (!account_number) {
-      console.error("Missing account_number in webhook payload for virtual account payment");
-      throw new Error("Missing account_number in webhook payload");
+    // Ensure tx_ref is present in the payload
+    if (!tx_ref) {
+      console.error("Missing tx_ref in webhook payload for virtual account payment");
+      throw new Error("Missing tx_ref in webhook payload");
     }
 
-    // Find the user by the virtual account number
+    // Find the user by the virtual account reference (tx_ref)
     const { data: userProfile, error: userError } = await supabase
       .from("profiles")
       .select("id, wallet_balance, email")
-      // Change the lookup to use the virtual_account_number from the webhook payload
-      // This is more reliable for virtual account payments
-      .eq("virtual_account_number", account_number)
+      .eq("virtual_account_reference", tx_ref)
       .single();
 
     if (userError) {
-      console.error("Error finding user profile:", userError);
-      throw new Error("User profile not found for this transaction reference");
+      // If not found by virtual_account_reference, try to find by other means
+      console.log("User not found by virtual_account_reference, trying alternative lookup methods");
+      
+      // Try to find by email as a fallback
+      const { data: userByEmail, error: emailError } = await supabase
+        .from("profiles")
+        .select("id, wallet_balance, email")
+        .eq("email", email)
+        .single();
+        
+      if (emailError || !userByEmail) {
+        console.error("Error finding user profile:", userError);
+        console.error("Email fallback also failed:", emailError);
+        throw new Error("User profile not found for this transaction reference");
+      }
+      
+      console.log("User found by email fallback");
+      // Use the user found by email
+      userProfile = userByEmail;
     }
 
     // Verify the email matches (additional security check)
