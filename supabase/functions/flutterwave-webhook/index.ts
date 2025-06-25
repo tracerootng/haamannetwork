@@ -70,16 +70,18 @@ serve(async (req) => {
     // Extract relevant data from the webhook
     const { 
       tx_ref, 
+      flw_ref, // Extract the unique Flutterwave reference
       amount, 
       currency, 
       customer: { email }
     } = payload.data;
 
     // Check if this transaction has already been processed (idempotency)
+    // Use flw_ref instead of tx_ref for idempotency check
     const { data: existingTransaction, error: txCheckError } = await supabase
       .from("transactions")
       .select("id")
-      .eq("flutterwave_tx_ref", tx_ref)
+      .eq("flutterwave_tx_ref", flw_ref) // Use flw_ref instead of tx_ref
       .eq("status", "success")
       .maybeSingle();
 
@@ -88,7 +90,7 @@ serve(async (req) => {
     }
 
     if (existingTransaction) {
-      console.log("Transaction already processed:", tx_ref);
+      console.log("Transaction already processed:", flw_ref);
       return new Response(
         JSON.stringify({ success: true, message: "Transaction already processed" }),
         {
@@ -105,7 +107,8 @@ serve(async (req) => {
     }
 
     // Find the user by the virtual account reference (tx_ref)
-    const { data: userProfile, error: userError } = await supabase
+    let userProfile;
+    const { data: profileData, error: userError } = await supabase
       .from("profiles")
       .select("id, wallet_balance, email")
       .eq("virtual_account_reference", tx_ref)
@@ -131,6 +134,8 @@ serve(async (req) => {
       console.log("User found by email fallback");
       // Use the user found by email
       userProfile = userByEmail;
+    } else {
+      userProfile = profileData;
     }
 
     // Verify the email matches (additional security check)
@@ -158,8 +163,8 @@ serve(async (req) => {
       type: "wallet_funding",
       amount: parseFloat(amount),
       status: "success",
-      reference: `FLW-${payload.data.flw_ref || payload.data.tx_ref}`, // Use Flutterwave's transaction reference for the incoming payment
-      flutterwave_tx_ref: payload.data.tx_ref, // Store the incoming payment's tx_ref
+      reference: `FLW-${flw_ref || tx_ref}`, // Use Flutterwave's transaction reference for the incoming payment
+      flutterwave_tx_ref: flw_ref, // Store the unique flw_ref for idempotency checks
       details: {
         payment_method: "bank_transfer",
         currency,
@@ -184,6 +189,7 @@ serve(async (req) => {
         user_id: userProfile.id,
         amount,
         tx_ref,
+        flw_ref,
         previous_balance: userProfile.wallet_balance,
         new_balance: newBalance,
       },
