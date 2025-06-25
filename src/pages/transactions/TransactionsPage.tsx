@@ -7,7 +7,7 @@ import Input from '../../components/ui/Input';
 import Select from '../../components/ui/Select';
 import { useAuthStore } from '../../store/authStore';
 import { supabase } from '../../lib/supabase';
-import { formatCurrency, formatDate, getStatusColor } from '../../lib/utils';
+import { formatCurrency, formatDate, formatDateTime, getStatusColor } from '../../lib/utils';
 import { jsPDF } from 'jspdf';
 
 type Transaction = {
@@ -107,7 +107,11 @@ const getTransactionLabel = (type: string, details: any) => {
     case 'waec':
       return 'WAEC Card';
     case 'wallet_funding':
-      return `Wallet Funding (${details.method || 'wallet'})`;
+      // Check if this is a bank transfer with originator info
+      if (details.flutterwave_data?.meta_data?.originatorname) {
+        return `Wallet Funding from ${details.flutterwave_data.meta_data.originatorname} (${details.payment_method || 'bank_transfer'})`;
+      }
+      return `Wallet Funding (${details.method || details.payment_method || 'wallet'})`;
     case 'product_purchase':
       return `Product Purchase - ${details.product_name || 'Product'}`;
     default:
@@ -146,7 +150,7 @@ const downloadReceipt = (transaction: any) => {
   
   // Details grid
   const details = [
-    ['Date:', formatDate(transaction.created_at)],
+    ['Date:', formatDateTime(transaction.created_at)],
     ['Reference:', transaction.reference || transaction.id],
     ['Type:', transaction.type.toUpperCase()],
     ['Description:', getTransactionLabel(transaction.type, transaction.details)],
@@ -929,7 +933,7 @@ const TransactionsPage: React.FC = () => {
                       {getTransactionLabel(transaction.type, transaction.details)}
                     </p>
                     <p className="text-xs text-gray-500 dark:text-gray-400">
-                      {formatDate(transaction.created_at)}
+                      {formatDateTime(transaction.created_at)}
                     </p>
                   </div>
                   

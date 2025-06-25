@@ -20,6 +20,16 @@ export function formatDate(date: string | Date): string {
   });
 }
 
+export function formatDateTime(date: string | Date): string {
+  return new Date(date).toLocaleString('en-NG', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
 export function truncateText(text: string, maxLength: number): string {
   if (text.length <= maxLength) return text;
   return `${text.slice(0, maxLength)}...`;

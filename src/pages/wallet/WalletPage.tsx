@@ -6,7 +6,7 @@ import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import { useAuthStore } from '../../store/authStore';
 import { supabase } from '../../lib/supabase';
-import { formatCurrency, formatDate, getStatusColor } from '../../lib/utils';
+import { formatCurrency, formatDate, formatDateTime, getStatusColor } from '../../lib/utils';
 
 type Transaction = {
   id: string;
@@ -30,7 +30,11 @@ const getTransactionLabel = (type: string, details: any) => {
     case 'waec':
       return 'WAEC Card';
     case 'wallet_funding':
-      return `Wallet Funding (${details.method})`;
+      // Check if this is a bank transfer with originator info
+      if (details.flutterwave_data?.meta_data?.originatorname) {
+        return `Wallet Funding from ${details.flutterwave_data.meta_data.originatorname} (${details.payment_method || 'bank_transfer'})`;
+      }
+      return `Wallet Funding (${details.method || details.payment_method || 'wallet'})`;
     case 'product_purchase':
       return `Product Purchase - ${details.product_name || 'Product'}`;
     default:
@@ -173,7 +177,7 @@ const WalletPage: React.FC = () => {
                       {getTransactionLabel(transaction.type, transaction.details)}
                     </p>
                     <p className="text-xs text-gray-500 dark:text-gray-400">
-                      {formatDate(transaction.created_at)}
+                      {formatDateTime(transaction.created_at)}
                     </p>
                   </div>
                   
