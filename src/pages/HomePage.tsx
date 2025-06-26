@@ -30,13 +30,38 @@ const HomePage: React.FC = () => {
     footer_company_name: 'Haaman Network',
   });
 
+  const [isLoading, setIsLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+
   useEffect(() => {
-    fetchBannerSettings();
-    fetchFooterSettings();
+    const initializeSettings = async () => {
+      setIsLoading(true);
+      setFetchError(null);
+      
+      try {
+        await Promise.all([
+          fetchBannerSettings(),
+          fetchFooterSettings()
+        ]);
+      } catch (error) {
+        console.error('Error initializing settings:', error);
+        setFetchError('Unable to load some settings. Using default values.');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    initializeSettings();
   }, []);
 
   const fetchBannerSettings = async () => {
     try {
+      // Check if Supabase is properly configured
+      if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
+        console.warn('Supabase environment variables not configured. Using default banner settings.');
+        return;
+      }
+
       const { data, error } = await supabase
         .from('admin_settings')
         .select('key, value')
@@ -51,21 +76,33 @@ const HomePage: React.FC = () => {
           'download_app_enabled'
         ]);
 
-      if (error) throw error;
+      if (error) {
+        console.warn('Error fetching banner settings:', error.message);
+        return;
+      }
 
-      const settings: Record<string, string> = {};
-      data?.forEach(setting => {
-        settings[setting.key] = setting.value;
-      });
+      if (data && data.length > 0) {
+        const settings: Record<string, string> = {};
+        data.forEach(setting => {
+          settings[setting.key] = setting.value;
+        });
 
-      setBannerSettings(prev => ({ ...prev, ...settings }));
+        setBannerSettings(prev => ({ ...prev, ...settings }));
+      }
     } catch (error) {
-      console.error('Error fetching banner settings:', error);
+      console.warn('Network error fetching banner settings:', error);
+      // Keep using default values - no need to throw
     }
   };
 
   const fetchFooterSettings = async () => {
     try {
+      // Check if Supabase is properly configured
+      if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
+        console.warn('Supabase environment variables not configured. Using default footer settings.');
+        return;
+      }
+
       const { data, error } = await supabase
         .from('admin_settings')
         .select('key, value')
@@ -76,16 +113,22 @@ const HomePage: React.FC = () => {
           'footer_company_name'
         ]);
 
-      if (error) throw error;
+      if (error) {
+        console.warn('Error fetching footer settings:', error.message);
+        return;
+      }
 
-      const settings: Record<string, string> = {};
-      data?.forEach(setting => {
-        settings[setting.key] = setting.value;
-      });
+      if (data && data.length > 0) {
+        const settings: Record<string, string> = {};
+        data.forEach(setting => {
+          settings[setting.key] = setting.value;
+        });
 
-      setFooterSettings(prev => ({ ...prev, ...settings }));
+        setFooterSettings(prev => ({ ...prev, ...settings }));
+      }
     } catch (error) {
-      console.error('Error fetching footer settings:', error);
+      console.warn('Network error fetching footer settings:', error);
+      // Keep using default values - no need to throw
     }
   };
 
@@ -177,8 +220,31 @@ const HomePage: React.FC = () => {
   // Get current year for copyright
   const currentYear = new Date().getFullYear();
 
+  // Show loading state briefly
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-4 border-[#0F9D58] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen">
+      {/* Error Banner */}
+      {fetchError && (
+        <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4">
+          <div className="flex">
+            <div className="ml-3">
+              <p className="text-sm text-yellow-700">{fetchError}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Hero Section */}
       <section className="relative bg-gradient-to-br from-[#0F9D58] via-[#0d8a4f] to-[#0b7746] py-20 sm:py-32 overflow-hidden">
         {/* Background Pattern */}
