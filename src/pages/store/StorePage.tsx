@@ -76,7 +76,7 @@ const StorePage: React.FC = () => {
     <div className="bg-gray-50 dark:bg-gray-900 min-h-screen">
       {/* Header */}
       <div className="bg-white dark:bg-gray-800 px-4 py-4 border-b border-gray-200 dark:border-gray-700 w-full">
-        <div className="flex justify-between items-center mb-4 max-w-[250px] mx-auto">
+        <div className="flex justify-between items-center mb-4 max-w-[350px] mx-auto">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Shop</h1>
           
           <div className="relative">
@@ -116,7 +116,7 @@ const StorePage: React.FC = () => {
 
         {/* Filters */}
         {showFilters && (
-          <div className="space-y-4 mb-4 p-4 bg-gray-50 dark:bg-gray-700 rounded-xl max-w-[250px] mx-auto">
+          <div className="space-y-4 mb-4 p-4 bg-gray-50 dark:bg-gray-700 rounded-xl max-w-[350px] mx-auto">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Sort by
@@ -137,7 +137,7 @@ const StorePage: React.FC = () => {
         )}
       </div>
 
-      <div className="p-4 space-y-6 max-w-[250px] mx-auto">
+      <div className="p-4 space-y-6 max-w-[350px] mx-auto">
         {/* Categories */}
         <div className="mb-2">
           <div className="flex justify-between items-center mb-2">
