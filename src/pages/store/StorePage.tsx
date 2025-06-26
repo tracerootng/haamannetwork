@@ -76,7 +76,7 @@ const StorePage: React.FC = () => {
     <div className="bg-gray-50 dark:bg-gray-900 min-h-screen">
       {/* Header */}
       <div className="bg-white dark:bg-gray-800 px-4 py-4 border-b border-gray-200 dark:border-gray-700 w-full">
-        <div className="flex justify-between items-center mb-4">
+        <div className="flex justify-between items-center mb-4 max-w-[250px] mx-auto">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Shop</h1>
           
           <div className="relative">
@@ -95,12 +95,12 @@ const StorePage: React.FC = () => {
         </div>
         
         {/* Search Bar */}
-        <div className="relative mb-4 w-full">
+        <div className="relative mb-4 max-w-[250px] mx-auto">
           <div className="relative w-full">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
             <input
               type="text"
-              placeholder="Search products, brands, categories..."
+              placeholder="Search products..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-10 pr-12 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0F9D58]"
@@ -116,7 +116,7 @@ const StorePage: React.FC = () => {
 
         {/* Filters */}
         {showFilters && (
-          <div className="space-y-4 mb-4 p-4 bg-gray-50 dark:bg-gray-700 rounded-xl">
+          <div className="space-y-4 mb-4 p-4 bg-gray-50 dark:bg-gray-700 rounded-xl max-w-[250px] mx-auto">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Sort by
@@ -137,7 +137,7 @@ const StorePage: React.FC = () => {
         )}
       </div>
 
-      <div className="p-4 space-y-6 max-w-full">
+      <div className="p-4 space-y-6 max-w-[250px] mx-auto">
         {/* Categories */}
         <div className="mb-2">
           <div className="flex justify-between items-center mb-2">
@@ -156,7 +156,7 @@ const StorePage: React.FC = () => {
                 <button
                   key={category.value}
                   onClick={() => setSelectedCategory(category.value)}
-                  className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all ${
+                  className={`flex-shrink-0 px-3 py-2 rounded-full text-xs font-medium whitespace-nowrap transition-all ${
                     selectedCategory === category.value
                       ? 'bg-[#0F9D58] text-white shadow-md'
                       : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:border-[#0F9D58]'
@@ -173,11 +173,11 @@ const StorePage: React.FC = () => {
         {selectedCategory === 'all' && featuredProducts.length > 0 && (
           <div>
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-gray-900 dark:text-white">Featured Products</h2>
-              <span className="text-sm text-[#0F9D58] font-medium">Limited Time Offers</span>
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white">Featured</h2>
+              <span className="text-sm text-[#0F9D58] font-medium">Limited Time</span>
             </div>
             
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+            <div className="grid grid-cols-1 gap-4 mb-8">
               {featuredProducts.map((product) => (
                 <div key={product.id} className="relative w-full">
                   <ProductCard product={product} />
@@ -204,12 +204,12 @@ const StorePage: React.FC = () => {
               {selectedCategory === 'all' ? 'All Products' : categories.find(c => c.value === selectedCategory)?.label}
             </h2>
             <span className="text-sm text-gray-500 dark:text-gray-400">
-              {filteredProducts.length} products found
+              {filteredProducts.length} found
             </span>
           </div>
           
           {filteredProducts.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 gap-4">
               {filteredProducts.map((product) => (
                 <div key={product.id} className="relative w-full">
                   <ProductCard product={product} />

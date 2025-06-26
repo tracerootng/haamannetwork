@@ -25,6 +25,9 @@ const ReferEarnPage: React.FC = () => {
     bonusPercentage: 6
   });
   const [referralCodeError, setReferralCodeError] = useState<string | null>(null);
+  const [verifyCodeInput, setVerifyCodeInput] = useState('');
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [verificationResult, setVerificationResult] = useState<{valid: boolean, message: string} | null>(null);
   
   // Generate referral code based on user info
   const referralCode = user ? user.referralCode : 'haaman-USER123';
@@ -119,40 +122,54 @@ const ReferEarnPage: React.FC = () => {
   };
 
   // Function to verify a referral code
-  const verifyReferralCode = async (code: string) => {
+  const verifyReferralCode = async () => {
+    if (!verifyCodeInput.trim()) {
+      setReferralCodeError("Please enter a referral code");
+      return;
+    }
+    
+    setIsVerifying(true);
+    setVerificationResult(null);
+    setReferralCodeError(null);
+    
     try {
-      setReferralCodeError(null);
-      
-      // Check if code is empty
-      if (!code.trim()) {
-        setReferralCodeError("Please enter a referral code");
-        return false;
-      }
-      
       // Check if the referral code exists in the database
       const { data, error } = await supabase
         .from('profiles')
         .select('id, name')
-        .eq('referral_code', code)
+        .eq('referral_code', verifyCodeInput)
         .maybeSingle();
       
       if (error) {
         console.error('Error verifying referral code:', error);
-        setReferralCodeError("Error verifying referral code. Please try again.");
-        return false;
+        setVerificationResult({
+          valid: false,
+          message: "Error verifying referral code. Please try again."
+        });
+        return;
       }
       
       if (!data) {
-        setReferralCodeError("Invalid referral code. Please check and try again.");
-        return false;
+        setVerificationResult({
+          valid: false,
+          message: "Invalid referral code. Please check and try again."
+        });
+        return;
       }
       
       // Valid referral code
-      return true;
+      setVerificationResult({
+        valid: true,
+        message: `Valid referral code! This code belongs to ${data.name.split(' ')[0]}.`
+      });
     } catch (error) {
       console.error('Error verifying referral code:', error);
-      setReferralCodeError("An unexpected error occurred. Please try again.");
-      return false;
+      setVerificationResult({
+        valid: false,
+        message: "An unexpected error occurred. Please try again."
+      });
+    } finally {
+      setIsVerifying(false);
     }
   };
 
@@ -169,7 +186,7 @@ const ReferEarnPage: React.FC = () => {
         <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white ml-4">Refer & Earn</h1>
       </div>
 
-      <div className="p-4 space-y-6 max-w-md mx-auto">
+      <div className="p-4 space-y-6 max-w-[250px] mx-auto">
         {/* Hero Section */}
         <div className="bg-gradient-to-br from-[#0F9D58] to-[#0d8a4f] rounded-2xl p-6 text-white relative overflow-hidden">
           {/* Background Pattern */}
@@ -328,6 +345,56 @@ const ReferEarnPage: React.FC = () => {
           </div>
         </div>
 
+        {/* Verify Referral Code Section */}
+        <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 sm:p-6 border border-gray-200 dark:border-gray-700">
+          <h3 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white mb-4">
+            Verify a Referral Code
+          </h3>
+          
+          <div className="space-y-4">
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Enter referral code to verify"
+                value={verifyCodeInput}
+                onChange={(e) => {
+                  setVerifyCodeInput(e.target.value);
+                  // Clear previous results when input changes
+                  setVerificationResult(null);
+                  setReferralCodeError(null);
+                }}
+                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0F9D58]"
+              />
+            </div>
+            
+            {referralCodeError && (
+              <div className="flex items-start space-x-2 text-red-500">
+                <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />
+                <p className="text-sm">{referralCodeError}</p>
+              </div>
+            )}
+            
+            {verificationResult && (
+              <div className={`flex items-start space-x-2 ${verificationResult.valid ? 'text-green-500' : 'text-red-500'}`}>
+                {verificationResult.valid ? (
+                  <CheckCircle size={16} className="flex-shrink-0 mt-0.5" />
+                ) : (
+                  <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />
+                )}
+                <p className="text-sm">{verificationResult.message}</p>
+              </div>
+            )}
+            
+            <button
+              onClick={verifyReferralCode}
+              disabled={isVerifying || !verifyCodeInput.trim()}
+              className="w-full bg-[#0F9D58] hover:bg-[#0d8a4f] text-white py-3 rounded-xl font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isVerifying ? 'Verifying...' : 'Verify Code'}
+            </button>
+          </div>
+        </div>
+
         {/* Referral History */}
         <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 sm:p-6 border border-gray-200 dark:border-gray-700">
           <h3 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white mb-4">
@@ -367,46 +434,6 @@ const ReferEarnPage: React.FC = () => {
               </p>
             </div>
           )}
-        </div>
-
-        {/* Verify Referral Code Section */}
-        <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 sm:p-6 border border-gray-200 dark:border-gray-700">
-          <h3 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white mb-4">
-            Verify a Referral Code
-          </h3>
-          
-          <div className="space-y-4">
-            <div className="relative">
-              <input
-                type="text"
-                placeholder="Enter referral code to verify"
-                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0F9D58]"
-                onChange={(e) => {
-                  // Clear error when user types
-                  if (referralCodeError) setReferralCodeError(null);
-                }}
-              />
-            </div>
-            
-            {referralCodeError && (
-              <div className="flex items-start space-x-2 text-red-500">
-                <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />
-                <p className="text-sm">{referralCodeError}</p>
-              </div>
-            )}
-            
-            <button
-              onClick={(e) => {
-                const input = e.currentTarget.previousElementSibling?.querySelector('input');
-                if (input) {
-                  verifyReferralCode(input.value);
-                }
-              }}
-              className="w-full bg-[#0F9D58] hover:bg-[#0d8a4f] text-white py-3 rounded-xl font-medium transition-colors"
-            >
-              Verify Code
-            </button>
-          </div>
         </div>
 
         {/* Terms & Conditions */}

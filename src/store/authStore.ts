@@ -179,12 +179,6 @@ export const useAuthStore = create<AuthState>()(
           // Verify referral code if provided
           let referrerProfile = null;
           if (referralCode) {
-            const isValid = await get().verifyReferralCode(referralCode);
-            if (!isValid) {
-              throw new Error('Invalid referral code. Please check and try again.');
-            }
-            
-            // Get referrer profile
             const { data: referrer, error: referrerError } = await supabase
               .from('profiles')
               .select('*')
@@ -192,6 +186,9 @@ export const useAuthStore = create<AuthState>()(
               .single();
               
             if (referrerError) {
+              if (referrerError.code === 'PGRST116') {
+                throw new Error('Invalid referral code. Please check and try again.');
+              }
               console.error('Error getting referrer profile:', referrerError);
               throw new Error('Error processing referral. Please try again.');
             }
