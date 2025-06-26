@@ -184,9 +184,9 @@ const ReferEarnPage: React.FC = () => {
         <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white ml-4">Refer & Earn</h1>
       </div>
 
-      <div className="p-4 space-y-6 max-w-md mx-auto">
+      <div className="p-4 space-y-6 w-full max-w-md mx-auto">
         {/* Hero Section */}
-        <div className="bg-gradient-to-br from-[#0F9D58] to-[#0d8a4f] rounded-2xl p-6 text-white relative overflow-hidden">
+        <div className="bg-gradient-to-br from-[#0F9D58] to-[#0d8a4f] rounded-2xl p-6 text-white relative overflow-hidden w-full">
           {/* Background Pattern */}
           <div className="absolute inset-0 opacity-10">
             <div className="absolute top-4 right-4 w-16 h-16 border-2 border-white rounded-full"></div>
