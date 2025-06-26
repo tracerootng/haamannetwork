@@ -20,6 +20,7 @@ type AuthState = {
   createVirtualAccount: (userId: string, email: string, firstName: string, lastName: string, phoneNumber?: string, bvn?: string) => Promise<void>;
   initRealtimeSubscription: () => void;
   cleanupRealtimeSubscription: () => void;
+  verifyReferralCode: (code: string) => Promise<boolean>;
 };
 
 export const useAuthStore = create<AuthState>()(
@@ -175,6 +176,29 @@ export const useAuthStore = create<AuthState>()(
       signup: async (email: string, password: string, name: string, phone?: string, referralCode?: string, bvn?: string) => {
         set({ isLoading: true });
         try {
+          // Verify referral code if provided
+          let referrerProfile = null;
+          if (referralCode) {
+            const isValid = await get().verifyReferralCode(referralCode);
+            if (!isValid) {
+              throw new Error('Invalid referral code. Please check and try again.');
+            }
+            
+            // Get referrer profile
+            const { data: referrer, error: referrerError } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('referral_code', referralCode)
+              .single();
+              
+            if (referrerError) {
+              console.error('Error getting referrer profile:', referrerError);
+              throw new Error('Error processing referral. Please try again.');
+            }
+            
+            referrerProfile = referrer;
+          }
+
           const { data, error } = await supabase.auth.signUp({
             email,
             password,
@@ -194,25 +218,6 @@ export const useAuthStore = create<AuthState>()(
             // Generate unique referral code
             const userReferralCode = `haaman-${name.replace(/\s+/g, '').toUpperCase()}${data.user.id.slice(-3)}`;
             
-            // Check if referral code exists and is valid
-            let referrerProfile = null;
-            if (referralCode) {
-              const { data: referrer, error: referrerError } = await supabase
-                .from('profiles')
-                .select('*')
-                .eq('referral_code', referralCode)
-                .maybeSingle();
-              
-              if (referrerError) {
-                console.error('Error finding referrer:', referrerError);
-              } else if (referrer) {
-                referrerProfile = referrer;
-                console.log('Found referrer profile:', referrer);
-              } else {
-                console.warn('Referral code not found:', referralCode);
-              }
-            }
-
             // Create user profile
             const profile = {
               id: data.user.id,
@@ -694,6 +699,33 @@ export const useAuthStore = create<AuthState>()(
           console.log('Cleaning up realtime subscription');
           supabase.removeChannel(realtimeSubscription);
           set({ realtimeSubscription: null });
+        }
+      },
+
+      // Function to verify a referral code
+      verifyReferralCode: async (code: string) => {
+        try {
+          // Check if code is empty
+          if (!code.trim()) {
+            return false;
+          }
+          
+          // Check if the referral code exists in the database
+          const { data, error } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('referral_code', code)
+            .maybeSingle();
+          
+          if (error) {
+            console.error('Error verifying referral code:', error);
+            return false;
+          }
+          
+          return !!data; // Return true if data exists, false otherwise
+        } catch (error) {
+          console.error('Error verifying referral code:', error);
+          return false;
         }
       },
     }),

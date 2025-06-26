@@ -5,7 +5,7 @@ import { useAuthStore } from '../../store/authStore';
 
 const SignupPage: React.FC = () => {
   const navigate = useNavigate();
-  const { signup, isLoading } = useAuthStore();
+  const { signup, isLoading, verifyReferralCode } = useAuthStore();
   const [searchParams] = useSearchParams();
   const referralCode = searchParams.get('ref');
   
@@ -22,10 +22,13 @@ const SignupPage: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isValidReferralCode, setIsValidReferralCode] = useState<boolean | null>(null);
+  const [isCheckingReferralCode, setIsCheckingReferralCode] = useState(false);
 
   useEffect(() => {
     if (referralCode) {
       setFormData(prev => ({ ...prev, referralCode }));
+      checkReferralCode(referralCode);
     }
   }, [referralCode]);
 
@@ -35,6 +38,31 @@ const SignupPage: React.FC = () => {
     // Clear error when user starts typing
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: '' }));
+    }
+    
+    // Check referral code when it changes
+    if (name === 'referralCode' && value.trim() !== '') {
+      checkReferralCode(value);
+    } else if (name === 'referralCode' && value.trim() === '') {
+      setIsValidReferralCode(null);
+    }
+  };
+
+  const checkReferralCode = async (code: string) => {
+    if (!code.trim()) {
+      setIsValidReferralCode(null);
+      return;
+    }
+    
+    setIsCheckingReferralCode(true);
+    try {
+      const isValid = await verifyReferralCode(code);
+      setIsValidReferralCode(isValid);
+    } catch (error) {
+      console.error('Error checking referral code:', error);
+      setIsValidReferralCode(false);
+    } finally {
+      setIsCheckingReferralCode(false);
     }
   };
 
@@ -65,6 +93,11 @@ const SignupPage: React.FC = () => {
       newErrors.confirmPassword = 'Please confirm your password';
     } else if (formData.password !== formData.confirmPassword) {
       newErrors.confirmPassword = 'Passwords do not match';
+    }
+
+    // Validate referral code if provided
+    if (formData.referralCode && isValidReferralCode === false) {
+      newErrors.referralCode = 'Invalid referral code';
     }
 
     // Validate BVN if virtual account creation is selected
@@ -107,6 +140,11 @@ const SignupPage: React.FC = () => {
         setErrors({ 
           general: 'An account with this email already exists. Please sign in instead or use a different email address.' 
         });
+      } else if (error.message?.includes('Invalid referral code')) {
+        setErrors({ 
+          referralCode: 'Invalid referral code. Please check and try again.',
+          general: 'Invalid referral code. Please check and try again.'
+        });
       } else {
         setErrors({ general: error.message || 'An error occurred during signup. Please try again.' });
       }
@@ -133,7 +171,7 @@ const SignupPage: React.FC = () => {
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-white py-8 px-6 shadow-xl rounded-2xl sm:px-10">
           {/* Referral Code Notice */}
-          {formData.referralCode && (
+          {formData.referralCode && isValidReferralCode && (
             <div className="mb-6 p-4 bg-[#0F9D58]/10 border border-[#0F9D58]/20 rounded-xl flex items-start gap-3">
               <Gift className="text-[#0F9D58] mt-0.5 flex-shrink-0" size={20} />
               <div className="flex-1">
@@ -232,6 +270,42 @@ const SignupPage: React.FC = () => {
               )}
             </div>
 
+            {/* Referral Code Field */}
+            <div>
+              <label htmlFor="referralCode" className="block text-sm font-medium text-gray-700 mb-2">
+                Referral Code <span className="text-gray-400">(Optional)</span>
+              </label>
+              <input
+                id="referralCode"
+                name="referralCode"
+                type="text"
+                value={formData.referralCode}
+                onChange={handleChange}
+                className={`w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0F9D58] focus:border-transparent transition-all duration-200 ${
+                  errors.referralCode ? 'border-red-300' : 'border-gray-300'
+                }`}
+                placeholder="Enter referral code (if any)"
+              />
+              {errors.referralCode && (
+                <p className="mt-1 text-sm text-red-600">{errors.referralCode}</p>
+              )}
+              {isCheckingReferralCode && (
+                <p className="mt-1 text-sm text-gray-500">Checking referral code...</p>
+              )}
+              {!isCheckingReferralCode && formData.referralCode && isValidReferralCode === true && (
+                <div className="mt-1 flex items-center text-sm text-[#0F9D58]">
+                  <CheckCircle size={16} className="mr-1" />
+                  <span>Valid referral code! You'll earn bonus rewards.</span>
+                </div>
+              )}
+              {!isCheckingReferralCode && formData.referralCode && isValidReferralCode === false && (
+                <div className="mt-1 flex items-center text-sm text-red-500">
+                  <AlertCircle size={16} className="mr-1" />
+                  <span>Invalid referral code. Please check and try again.</span>
+                </div>
+              )}
+            </div>
+
             {/* Virtual Account Option */}
             <div className="bg-blue-50 p-4 rounded-xl">
               <div className="flex items-center mb-2">
@@ -277,28 +351,6 @@ const SignupPage: React.FC = () => {
                   <p className="mt-1 text-xs text-gray-500">
                     Your BVN is required by Flutterwave to create a permanent virtual account. Your data is secure and will not be shared with third parties.
                   </p>
-                </div>
-              )}
-            </div>
-
-            {/* Referral Code Field */}
-            <div>
-              <label htmlFor="referralCode" className="block text-sm font-medium text-gray-700 mb-2">
-                Referral Code <span className="text-gray-400">(Optional)</span>
-              </label>
-              <input
-                id="referralCode"
-                name="referralCode"
-                type="text"
-                value={formData.referralCode}
-                onChange={handleChange}
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0F9D58] focus:border-transparent transition-all duration-200"
-                placeholder="Enter referral code (if any)"
-              />
-              {formData.referralCode && (
-                <div className="mt-1 flex items-center text-sm text-[#0F9D58]">
-                  <CheckCircle size={16} className="mr-1" />
-                  <span>Referral code applied! You'll earn bonus rewards.</span>
                 </div>
               )}
             </div>

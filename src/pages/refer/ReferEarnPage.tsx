@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Copy, Share2, Users, Gift, TrendingUp, Award, ArrowLeft, CheckCircle, User } from 'lucide-react';
+import { Copy, Share2, Users, Gift, TrendingUp, Award, ArrowLeft, CheckCircle, User, AlertCircle } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { formatCurrency } from '../../lib/utils';
 import { supabase } from '../../lib/supabase';
@@ -24,6 +24,7 @@ const ReferEarnPage: React.FC = () => {
     referralEarnings: 0,
     bonusPercentage: 6
   });
+  const [referralCodeError, setReferralCodeError] = useState<string | null>(null);
   
   // Generate referral code based on user info
   const referralCode = user ? user.referralCode : 'haaman-USER123';
@@ -66,17 +67,21 @@ const ReferEarnPage: React.FC = () => {
         .from('admin_settings')
         .select('value')
         .eq('key', 'referral_bonus_percentage')
-        .maybeSingle();
+        .single();
       
       if (settingsError) {
-        console.error('Error fetching referral bonus percentage:', settingsError);
+        if (settingsError.code === 'PGRST116') {
+          // If no setting found, use default value
+          console.log('No referral bonus percentage setting found, using default value');
+        } else {
+          console.error('Error fetching referral bonus percentage:', settingsError);
+        }
       } else if (settingsData) {
         setReferralStats(prev => ({
           ...prev,
           bonusPercentage: parseFloat(settingsData.value) || 6
         }));
       }
-      // If settingsData is null (no setting found), we keep the default value of 6%
       
       // Get user's current stats from the user object in the store
       if (user) {
@@ -110,6 +115,44 @@ const ReferEarnPage: React.FC = () => {
     } else {
       // Fallback for browsers that don't support Web Share API
       copyReferralCode();
+    }
+  };
+
+  // Function to verify a referral code
+  const verifyReferralCode = async (code: string) => {
+    try {
+      setReferralCodeError(null);
+      
+      // Check if code is empty
+      if (!code.trim()) {
+        setReferralCodeError("Please enter a referral code");
+        return false;
+      }
+      
+      // Check if the referral code exists in the database
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, name')
+        .eq('referral_code', code)
+        .maybeSingle();
+      
+      if (error) {
+        console.error('Error verifying referral code:', error);
+        setReferralCodeError("Error verifying referral code. Please try again.");
+        return false;
+      }
+      
+      if (!data) {
+        setReferralCodeError("Invalid referral code. Please check and try again.");
+        return false;
+      }
+      
+      // Valid referral code
+      return true;
+    } catch (error) {
+      console.error('Error verifying referral code:', error);
+      setReferralCodeError("An unexpected error occurred. Please try again.");
+      return false;
     }
   };
 
@@ -324,6 +367,46 @@ const ReferEarnPage: React.FC = () => {
               </p>
             </div>
           )}
+        </div>
+
+        {/* Verify Referral Code Section */}
+        <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 sm:p-6 border border-gray-200 dark:border-gray-700">
+          <h3 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white mb-4">
+            Verify a Referral Code
+          </h3>
+          
+          <div className="space-y-4">
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Enter referral code to verify"
+                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0F9D58]"
+                onChange={(e) => {
+                  // Clear error when user types
+                  if (referralCodeError) setReferralCodeError(null);
+                }}
+              />
+            </div>
+            
+            {referralCodeError && (
+              <div className="flex items-start space-x-2 text-red-500">
+                <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />
+                <p className="text-sm">{referralCodeError}</p>
+              </div>
+            )}
+            
+            <button
+              onClick={(e) => {
+                const input = e.currentTarget.previousElementSibling?.querySelector('input');
+                if (input) {
+                  verifyReferralCode(input.value);
+                }
+              }}
+              className="w-full bg-[#0F9D58] hover:bg-[#0d8a4f] text-white py-3 rounded-xl font-medium transition-colors"
+            >
+              Verify Code
+            </button>
+          </div>
         </div>
 
         {/* Terms & Conditions */}

@@ -43,7 +43,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
 
   return (
     <Card
-      className="h-full flex flex-col group cursor-pointer overflow-hidden"
+      className="h-full flex flex-col group cursor-pointer overflow-hidden w-full"
       hoverEffect
       onClick={handleProductClick}
     >

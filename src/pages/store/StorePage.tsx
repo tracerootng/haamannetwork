@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Search, ShoppingCart, Filter, Star, Heart } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Search, ShoppingBag, Filter, Star, Heart } from 'lucide-react';
 import ProductCard from '../../components/store/ProductCard';
 import Card from '../../components/ui/Card';
 import Input from '../../components/ui/Input';
 import Button from '../../components/ui/Button';
 import { useCartStore } from '../../store/cartStore';
 import { useProductStore } from '../../store/productStore';
-import { useNavigate } from 'react-router-dom';
 
 const StorePage: React.FC = () => {
   const navigate = useNavigate();
@@ -75,7 +75,7 @@ const StorePage: React.FC = () => {
   return (
     <div className="bg-gray-50 dark:bg-gray-900 min-h-screen">
       {/* Header */}
-      <div className="bg-white dark:bg-gray-800 px-4 py-4 border-b border-gray-200 dark:border-gray-700">
+      <div className="bg-white dark:bg-gray-800 px-4 py-4 border-b border-gray-200 dark:border-gray-700 w-full">
         <div className="flex justify-between items-center mb-4">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Shop</h1>
           
@@ -84,7 +84,7 @@ const StorePage: React.FC = () => {
               onClick={() => navigate('/store/cart')}
               className="relative p-2 bg-[#0F9D58] text-white rounded-full hover:bg-[#0d8a4f] transition-colors"
             >
-              <ShoppingCart size={20} />
+              <ShoppingBag size={20} />
               {getTotalItems() > 0 && (
                 <span className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold">
                   {getTotalItems()}
@@ -96,19 +96,22 @@ const StorePage: React.FC = () => {
         
         {/* Search Bar */}
         <div className="relative mb-4 w-full">
-          <Input
-            placeholder="Search products, brands, categories..."
-            leftIcon={<Search size={16} />}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pr-12 w-full"
-          />
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className="absolute right-3 top-1/2 transform -translate-y-1/2 p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
-          >
-            <Filter size={16} className="text-gray-500" />
-          </button>
+          <div className="relative w-full">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
+            <input
+              type="text"
+              placeholder="Search products, brands, categories..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-12 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0F9D58]"
+            />
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className="absolute right-3 top-1/2 transform -translate-y-1/2 p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+            >
+              <Filter size={16} className="text-gray-500" />
+            </button>
+          </div>
         </div>
 
         {/* Filters */}
@@ -134,7 +137,7 @@ const StorePage: React.FC = () => {
         )}
       </div>
 
-      <div className="p-4 space-y-6">
+      <div className="p-4 space-y-6 max-w-full">
         {/* Categories */}
         <div className="mb-2">
           <div className="flex justify-between items-center mb-2">
@@ -147,7 +150,7 @@ const StorePage: React.FC = () => {
             </button>
           </div>
           
-          <div className="overflow-x-auto pb-2">
+          <div className="overflow-x-auto pb-2 scrollbar-hide">
             <div className="flex space-x-3 min-w-max flex-nowrap">
               {(showAllCategories ? categories : categories.slice(0, 5)).map((category) => (
                 <button
@@ -176,7 +179,7 @@ const StorePage: React.FC = () => {
             
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
               {featuredProducts.map((product) => (
-                <div key={product.id} className="relative">
+                <div key={product.id} className="relative w-full">
                   <ProductCard product={product} />
                   {product.is_new && (
                     <div className="absolute top-2 left-2 bg-[#0F9D58] text-white text-xs px-2 py-1 rounded-full font-bold">
@@ -208,7 +211,7 @@ const StorePage: React.FC = () => {
           {filteredProducts.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {filteredProducts.map((product) => (
-                <div key={product.id} className="relative">
+                <div key={product.id} className="relative w-full">
                   <ProductCard product={product} />
                   
                   {/* Badges */}
@@ -242,7 +245,7 @@ const StorePage: React.FC = () => {
               ))}
             </div>
           ) : (
-            <Card className="p-8 text-center">
+            <Card className="p-8 text-center w-full">
               <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Search size={24} className="text-gray-400" />
               </div>
