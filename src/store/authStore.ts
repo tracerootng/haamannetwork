@@ -23,6 +23,16 @@ type AuthState = {
   verifyReferralCode: (code: string) => Promise<boolean>;
 };
 
+// Function to generate a random alphanumeric string for referral codes
+const generateRandomReferralCode = (length = 8) => {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let result = '';
+  for (let i = 0; i < length; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return `HN-${result}`;
+};
+
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
@@ -52,6 +62,9 @@ export const useAuthStore = create<AuthState>()(
             if (profileError) {
               // Only create profile if it doesn't exist (PGRST116 error code)
               if (profileError.code === 'PGRST116') {
+                // Generate a unique referral code
+                const referralCode = generateRandomReferralCode();
+                
                 const newProfile = {
                   id: data.user.id,
                   name: data.user.user_metadata?.name || 'User',
@@ -59,7 +72,7 @@ export const useAuthStore = create<AuthState>()(
                   phone: data.user.user_metadata?.phone || '',
                   wallet_balance: 0,
                   is_admin: false,
-                  referral_code: `haaman-${data.user.user_metadata?.name?.replace(/\s+/g, '').toUpperCase() || 'USER'}${data.user.id.slice(-3)}`,
+                  referral_code: referralCode,
                   referred_by: null,
                   total_referrals: 0,
                   referral_earnings: 0,
@@ -198,7 +211,7 @@ export const useAuthStore = create<AuthState>()(
               referrerProfile = referrer;
             } else {
               console.log('No referrer found for code:', formattedReferralCode);
-              // Continue with signup without a referrer
+              throw new Error('Invalid referral code. Please check and try again.');
             }
           }
 
@@ -218,8 +231,8 @@ export const useAuthStore = create<AuthState>()(
           if (error) throw error;
 
           if (data.user) {
-            // Generate unique referral code
-            const userReferralCode = `haaman-${name.replace(/\s+/g, '').toUpperCase()}${data.user.id.slice(-3)}`;
+            // Generate unique random referral code
+            const userReferralCode = generateRandomReferralCode();
             
             // Create user profile
             const profile = {
@@ -479,7 +492,7 @@ export const useAuthStore = create<AuthState>()(
 
           if (profileError && profileError.code === 'PGRST116') {
             // Profile doesn't exist, create one
-            const userReferralCode = `haaman-${session.user.user_metadata?.name?.replace(/\s+/g, '').toUpperCase() || 'USER'}${session.user.id.slice(-3)}`;
+            const referralCode = generateRandomReferralCode();
             
             const newProfile = {
               id: session.user.id,
@@ -488,7 +501,7 @@ export const useAuthStore = create<AuthState>()(
               phone: session.user.user_metadata?.phone || '',
               wallet_balance: 0,
               is_admin: false,
-              referral_code: userReferralCode,
+              referral_code: referralCode,
               referred_by: null,
               total_referrals: 0,
               referral_earnings: 0,

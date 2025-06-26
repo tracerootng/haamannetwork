@@ -29,8 +29,8 @@ const ReferEarnPage: React.FC = () => {
   const [isVerifying, setIsVerifying] = useState(false);
   const [verificationResult, setVerificationResult] = useState<{valid: boolean, message: string} | null>(null);
   
-  // Generate referral code based on user info
-  const referralCode = user ? user.referralCode : 'haaman-USER123';
+  // Get referral code from user
+  const referralCode = user ? user.referralCode : 'HN-XXXXXXXX';
   const referralLink = `https://haamannetwork.com/signup?ref=${referralCode}`;
 
   useEffect(() => {
@@ -131,35 +131,20 @@ const ReferEarnPage: React.FC = () => {
     setReferralCodeError(null);
     
     try {
-      // Check if the referral code exists in the database
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, name')
-        .eq('referral_code', verifyCodeInput)
-        .maybeSingle();
+      // Use the verifyReferralCode function from authStore
+      const isValid = await useAuthStore.getState().verifyReferralCode(verifyCodeInput);
       
-      if (error) {
-        console.error('Error verifying referral code:', error);
+      if (isValid) {
         setVerificationResult({
-          valid: false,
-          message: "Error verifying referral code. Please try again."
+          valid: true,
+          message: "Valid referral code! You can use this code when signing up."
         });
-        return;
-      }
-      
-      if (!data) {
+      } else {
         setVerificationResult({
           valid: false,
           message: "Invalid referral code. Please check and try again."
         });
-        return;
       }
-      
-      // Valid referral code
-      setVerificationResult({
-        valid: true,
-        message: `Valid referral code! This code belongs to ${data.name.split(' ')[0]}.`
-      });
     } catch (error) {
       console.error('Error verifying referral code:', error);
       setVerificationResult({

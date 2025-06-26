@@ -158,7 +158,7 @@ const DataServicePage: React.FC = () => {
         .order('created_at', { ascending: false });
         
       if (error) {
-        // If the table doesn't exist yet, we'll use transaction history to extract beneficiaries
+        // If there's an error, we'll use transaction history to extract beneficiaries
         console.error('Error fetching beneficiaries:', error);
         
         // Get data transactions
@@ -285,22 +285,7 @@ const DataServicePage: React.FC = () => {
     if (!user || !selectedNetwork || !phoneNumber || !beneficiaryName) return;
     
     try {
-      // Check if beneficiaries table exists
-      const { error: tableCheckError } = await supabase
-        .from('beneficiaries')
-        .select('id')
-        .limit(1);
-      
-      if (tableCheckError) {
-        // Table doesn't exist, create it
-        const { error: createTableError } = await supabase.rpc('create_beneficiaries_table');
-        if (createTableError) {
-          console.error('Error creating beneficiaries table:', createTableError);
-          return;
-        }
-      }
-      
-      // Insert the beneficiary
+      // Insert the beneficiary directly
       const { error } = await supabase
         .from('beneficiaries')
         .insert([{
@@ -523,43 +508,45 @@ const DataServicePage: React.FC = () => {
                 )}
               </div>
             ) : (
-              <div className="flex overflow-x-auto space-x-3 pb-2 scrollbar-hide">
-                {beneficiaries.map((beneficiary) => (
+              <div className="overflow-x-auto scrollbar-hide">
+                <div className="flex space-x-3 pb-2 flex-nowrap">
+                  {beneficiaries.map((beneficiary) => (
+                    <button
+                      key={beneficiary.id}
+                      onClick={() => selectBeneficiary(beneficiary)}
+                      className="flex-shrink-0 flex flex-col items-center p-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-[#0F9D58] transition-colors"
+                    >
+                      <div className={`w-12 h-12 rounded-full flex items-center justify-center mb-2 ${
+                        beneficiary.network === 'MTN' ? 'bg-yellow-100 text-yellow-600' :
+                        beneficiary.network === 'AIRTEL' ? 'bg-red-100 text-red-600' :
+                        beneficiary.network === 'GLO' ? 'bg-green-100 text-green-600' :
+                        beneficiary.network === '9MOBILE' ? 'bg-teal-100 text-teal-600' :
+                        'bg-gray-100 text-gray-600'
+                      }`}>
+                        <User size={20} />
+                      </div>
+                      <p className="text-sm font-medium text-gray-900 dark:text-white">{beneficiary.name}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">{beneficiary.phone_number}</p>
+                    </button>
+                  ))}
+                  
+                  {/* Add New Beneficiary Button */}
                   <button
-                    key={beneficiary.id}
-                    onClick={() => selectBeneficiary(beneficiary)}
-                    className="flex-shrink-0 flex flex-col items-center p-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-[#0F9D58] transition-colors"
+                    onClick={() => {
+                      setSelectedNetwork('');
+                      setPhoneNumber('');
+                      setBeneficiaryName('');
+                      setSaveAsBeneficiary(true);
+                    }}
+                    className="flex-shrink-0 flex flex-col items-center p-3 bg-white dark:bg-gray-800 rounded-xl border border-dashed border-gray-300 dark:border-gray-600 hover:border-[#0F9D58] transition-colors"
                   >
-                    <div className={`w-12 h-12 rounded-full flex items-center justify-center mb-2 ${
-                      beneficiary.network === 'MTN' ? 'bg-yellow-100 text-yellow-600' :
-                      beneficiary.network === 'AIRTEL' ? 'bg-red-100 text-red-600' :
-                      beneficiary.network === 'GLO' ? 'bg-green-100 text-green-600' :
-                      beneficiary.network === '9MOBILE' ? 'bg-teal-100 text-teal-600' :
-                      'bg-gray-100 text-gray-600'
-                    }`}>
-                      <User size={20} />
+                    <div className="w-12 h-12 rounded-full flex items-center justify-center mb-2 bg-gray-100 dark:bg-gray-700 text-[#0F9D58]">
+                      <Plus size={20} />
                     </div>
-                    <p className="text-sm font-medium text-gray-900 dark:text-white">{beneficiary.name}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">{beneficiary.phone_number}</p>
+                    <p className="text-sm font-medium text-gray-900 dark:text-white">Add New</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Beneficiary</p>
                   </button>
-                ))}
-                
-                {/* Add New Beneficiary Button */}
-                <button
-                  onClick={() => {
-                    setSelectedNetwork('');
-                    setPhoneNumber('');
-                    setBeneficiaryName('');
-                    setSaveAsBeneficiary(true);
-                  }}
-                  className="flex-shrink-0 flex flex-col items-center p-3 bg-white dark:bg-gray-800 rounded-xl border border-dashed border-gray-300 dark:border-gray-600 hover:border-[#0F9D58] transition-colors"
-                >
-                  <div className="w-12 h-12 rounded-full flex items-center justify-center mb-2 bg-gray-100 dark:bg-gray-700 text-[#0F9D58]">
-                    <Plus size={20} />
-                  </div>
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">Add New</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Beneficiary</p>
-                </button>
+                </div>
               </div>
             )}
           </div>

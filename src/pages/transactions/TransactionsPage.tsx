@@ -375,75 +375,90 @@ const TransactionsPage: React.FC = () => {
     
     setLoadingLeaderboard(true);
     try {
-      // Fetch all users with their transaction data
-      const { data: profiles, error: profilesError } = await supabase
-        .from('profiles')
-        .select('id, name')
-        .order('created_at', { ascending: false })
-        .limit(50);  // Limit to a reasonable number
-        
-      if (profilesError) throw profilesError;
-      
-      // For each user, calculate their total data spending
-      const leaderboardData: LeaderboardEntry[] = [];
-      
-      for (const profile of profiles || []) {
-        // Get data transactions for this user
-        const { data: transactions, error: txError } = await supabase
-          .from('transactions')
-          .select('amount, details')
-          .eq('user_id', profile.id)
-          .eq('type', 'data')
-          .eq('status', 'success');
-          
-        if (txError) continue; // Skip this user if there's an error
-        
-        // Calculate total amount spent on data
-        const totalAmount = transactions?.reduce((sum, tx) => sum + Number(tx.amount), 0) || 0;
-        
-        // Only include users who have spent money on data
-        if (totalAmount > 0) {
-          // Determine the most used network
-          const networkCounts: {[key: string]: number} = {};
-          transactions?.forEach(tx => {
-            const network = tx.details?.network?.toLowerCase() || 'unknown';
-            networkCounts[network] = (networkCounts[network] || 0) + 1;
-          });
-          
-          let mostUsedNetwork = 'unknown';
-          let maxCount = 0;
-          Object.entries(networkCounts).forEach(([network, count]) => {
-            if (count > maxCount) {
-              mostUsedNetwork = network;
-              maxCount = count;
-            }
-          });
-          
-          // Add to leaderboard
-          leaderboardData.push({
-            user_id: profile.id,
-            // Mask the name for privacy, except for current user
-            name: profile.id === user.id 
-              ? `${profile.name} (You)` 
-              : `${profile.name.split(' ')[0]} ${profile.name.split(' ')[1]?.charAt(0) || ''}`,
-            network: mostUsedNetwork,
-            total_amount: totalAmount,
-            rank: 0, // Will be set after sorting
-            is_current_user: profile.id === user.id
-          });
-        }
-      }
-      
-      // Sort by total amount and assign ranks
-      leaderboardData.sort((a, b) => b.total_amount - a.total_amount);
-      leaderboardData.forEach((entry, index) => {
-        entry.rank = index + 1;
+      // Call the RPC function to get the leaderboard data
+      const { data, error } = await supabase.rpc('get_data_usage_leaderboard', {
+        network_filter: selectedNetwork === 'all' ? null : selectedNetwork
       });
       
-      // Take top 5
-      setLeaderboard(leaderboardData.slice(0, 5));
+      if (error) throw error;
+      
+      // Set the leaderboard data (should return top 10 users)
+      setLeaderboard(data || []);
     } catch (error) {
       console.error('Error fetching leaderboard:', error);
+      
+      // Fallback method if RPC function fails
+      try {
+        // Fetch all users with their transaction data
+        const { data: profiles, error: profilesError } = await supabase
+          .from('profiles')
+          .select('id, name')
+          .order('created_at', { ascending: false })
+          .limit(50);  // Limit to a reasonable number
+          
+        if (profilesError) throw profilesError;
+        
+        // For each user, calculate their total data spending
+        const leaderboardData: LeaderboardEntry[] = [];
+        
+        for (const profile of profiles || []) {
+          // Get data transactions for this user
+          const { data: transactions, error: txError } = await supabase
+            .from('transactions')
+            .select('amount, details')
+            .eq('user_id', profile.id)
+            .eq('type', 'data')
+            .eq('status', 'success');
+            
+          if (txError) continue; // Skip this user if there's an error
+          
+          // Calculate total amount spent on data
+          const totalAmount = transactions?.reduce((sum, tx) => sum + Number(tx.amount), 0) || 0;
+          
+          // Only include users who have spent money on data
+          if (totalAmount > 0) {
+            // Determine the most used network
+            const networkCounts: {[key: string]: number} = {};
+            transactions?.forEach(tx => {
+              const network = tx.details?.network?.toLowerCase() || 'unknown';
+              networkCounts[network] = (networkCounts[network] || 0) + 1;
+            });
+            
+            let mostUsedNetwork = 'unknown';
+            let maxCount = 0;
+            Object.entries(networkCounts).forEach(([network, count]) => {
+              if (count > maxCount) {
+                mostUsedNetwork = network;
+                maxCount = count;
+              }
+            });
+            
+            // Add to leaderboard
+            leaderboardData.push({
+              user_id: profile.id,
+              // Mask the name for privacy, except for current user
+              name: profile.id === user.id 
+                ? `${profile.name} (You)` 
+                : `${profile.name.split(' ')[0]} ${profile.name.split(' ')[1]?.charAt(0) || ''}`,
+              network: mostUsedNetwork,
+              total_amount: totalAmount,
+              rank: 0, // Will be set after sorting
+              is_current_user: profile.id === user.id
+            });
+          }
+        }
+        
+        // Sort by total amount and assign ranks
+        leaderboardData.sort((a, b) => b.total_amount - a.total_amount);
+        leaderboardData.forEach((entry, index) => {
+          entry.rank = index + 1;
+        });
+        
+        // Take top 10
+        setLeaderboard(leaderboardData.slice(0, 10));
+      } catch (fallbackError) {
+        console.error('Error with fallback leaderboard method:', fallbackError);
+      }
     } finally {
       setLoadingLeaderboard(false);
     }
@@ -779,7 +794,7 @@ const TransactionsPage: React.FC = () => {
                   <Trophy className="text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" size={16} />
                   <div className="ml-3">
                     <p className="text-sm text-blue-800 dark:text-blue-200">
-                      The leaderboard shows the top 5 users based on their total spending on data bundles. 
+                      The leaderboard shows the top 10 users based on their total spending on data bundles. 
                       Privacy is important to us, so only partial names are displayed.
                     </p>
                   </div>
@@ -814,57 +829,59 @@ const TransactionsPage: React.FC = () => {
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#0F9D58]"></div>
             </div>
           ) : beneficiaries.length > 0 ? (
-            <div className="space-y-3">
-              {beneficiaries.map((beneficiary) => (
-                <div key={beneficiary.id} className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 flex items-center justify-between">
-                  <div className="flex items-center">
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                      beneficiary.network === 'mtn' ? 'bg-yellow-100 text-yellow-600' :
-                      beneficiary.network === 'airtel' ? 'bg-red-100 text-red-600' :
-                      beneficiary.network === 'glo' ? 'bg-green-100 text-green-600' :
-                      beneficiary.network === '9mobile' ? 'bg-teal-100 text-teal-600' :
-                      'bg-gray-100 text-gray-600'
-                    }`}>
-                      <Users size={18} />
-                    </div>
-                    
-                    <div className="ml-3">
-                      <p className="font-medium text-gray-900 dark:text-white">{beneficiary.name}</p>
-                      <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
-                        <span>{beneficiary.phone_number}</span>
-                        <span className="mx-1">•</span>
-                        <span className="capitalize">{beneficiary.network}</span>
-                        <Badge 
-                          variant={beneficiary.type === 'airtime' ? 'warning' : 'success'} 
-                          className="ml-2 text-xs"
-                        >
-                          {beneficiary.type}
-                        </Badge>
+            <div className="space-y-3 w-full">
+              <div className="overflow-x-auto w-full">
+                {beneficiaries.map((beneficiary) => (
+                  <div key={beneficiary.id} className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 flex items-center justify-between mb-3 w-full">
+                    <div className="flex items-center">
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                        beneficiary.network === 'mtn' ? 'bg-yellow-100 text-yellow-600' :
+                        beneficiary.network === 'airtel' ? 'bg-red-100 text-red-600' :
+                        beneficiary.network === 'glo' ? 'bg-green-100 text-green-600' :
+                        beneficiary.network === '9mobile' ? 'bg-teal-100 text-teal-600' :
+                        'bg-gray-100 text-gray-600'
+                      }`}>
+                        <Users size={18} />
+                      </div>
+                      
+                      <div className="ml-3">
+                        <p className="font-medium text-gray-900 dark:text-white">{beneficiary.name}</p>
+                        <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
+                          <span>{beneficiary.phone_number}</span>
+                          <span className="mx-1">•</span>
+                          <span className="capitalize">{beneficiary.network}</span>
+                          <Badge 
+                            variant={beneficiary.type === 'airtime' ? 'warning' : 'success'} 
+                            className="ml-2 text-xs"
+                          >
+                            {beneficiary.type}
+                          </Badge>
+                        </div>
                       </div>
                     </div>
+                    
+                    <div className="flex space-x-2">
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="text-xs px-2 py-1"
+                        onClick={() => {
+                          if (beneficiary.type === 'airtime') {
+                            navigate('/services/airtime');
+                          } else {
+                            navigate('/services/data');
+                          }
+                        }}
+                      >
+                        Use
+                      </Button>
+                      <Button variant="outline" size="sm" className="text-xs px-2 py-1 text-red-500 border-red-200">
+                        Delete
+                      </Button>
+                    </div>
                   </div>
-                  
-                  <div className="flex space-x-2">
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      className="text-xs px-2 py-1"
-                      onClick={() => {
-                        if (beneficiary.type === 'airtime') {
-                          navigate('/services/airtime');
-                        } else {
-                          navigate('/services/data');
-                        }
-                      }}
-                    >
-                      Use
-                    </Button>
-                    <Button variant="outline" size="sm" className="text-xs px-2 py-1 text-red-500 border-red-200">
-                      Delete
-                    </Button>
-                  </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           ) : (
             <div className="text-center py-6 bg-gray-50 dark:bg-gray-700 rounded-lg">
