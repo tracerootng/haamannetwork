@@ -179,23 +179,25 @@ export const useAuthStore = create<AuthState>()(
           // Verify referral code if provided
           let referrerProfile = null;
           if (referralCode && referralCode.trim() !== '') {
-            console.log('Checking referral code:', referralCode);
+            console.log('Verifying referral code:', referralCode);
+            
+            // Format the referral code properly before querying
+            const formattedReferralCode = referralCode.trim();
             
             const { data: referrer, error: referrerError } = await supabase
               .from('profiles')
               .select('*')
-              .eq('referral_code', referralCode)
+              .eq('referral_code', formattedReferralCode)
               .maybeSingle();
               
             if (referrerError) {
-              console.error('Error checking referrer profile:', referrerError);
+              console.error('Error getting referrer profile:', referrerError);
               // Don't throw an error, just log it and continue with signup
-              // The user will be created without a referrer
             } else if (referrer) {
               console.log('Referrer found:', referrer);
               referrerProfile = referrer;
             } else {
-              console.log('No referrer found for code:', referralCode);
+              console.log('No referrer found for code:', formattedReferralCode);
               // Continue with signup without a referrer
             }
           }
@@ -713,11 +715,14 @@ export const useAuthStore = create<AuthState>()(
           
           console.log('Verifying referral code:', code);
           
+          // Format the code properly before checking
+          const formattedCode = code.trim();
+          
           // Check if the referral code exists in the database
           const { data, error } = await supabase
             .from('profiles')
             .select('id, name')
-            .eq('referral_code', code)
+            .eq('referral_code', formattedCode)
             .maybeSingle();
           
           if (error) {
