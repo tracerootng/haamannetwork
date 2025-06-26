@@ -3,6 +3,7 @@ import { Search, ShoppingCart, Filter, Star, Heart } from 'lucide-react';
 import ProductCard from '../../components/store/ProductCard';
 import Card from '../../components/ui/Card';
 import Input from '../../components/ui/Input';
+import Button from '../../components/ui/Button';
 import { useCartStore } from '../../store/cartStore';
 import { useProductStore } from '../../store/productStore';
 import { useNavigate } from 'react-router-dom';
@@ -13,6 +14,7 @@ const StorePage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState('featured');
   const [showFilters, setShowFilters] = useState(false);
+  const [showAllCategories, setShowAllCategories] = useState(false);
   const { getTotalItems } = useCartStore();
   const { products, loading, fetchProducts } = useProductStore();
 
@@ -134,20 +136,34 @@ const StorePage: React.FC = () => {
 
       <div className="p-4 space-y-6">
         {/* Categories */}
-        <div className="flex overflow-x-auto pb-2 space-x-3 scrollbar-hide">
-          {categories.map((category) => (
-            <button
-              key={category.value}
-              onClick={() => setSelectedCategory(category.value)}
-              className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all ${
-                selectedCategory === category.value
-                  ? 'bg-[#0F9D58] text-white shadow-md'
-                  : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:border-[#0F9D58]'
-              }`}
+        <div className="mb-2">
+          <div className="flex justify-between items-center mb-2">
+            <h2 className="text-lg font-medium text-gray-900 dark:text-white">Categories</h2>
+            <button 
+              onClick={() => setShowAllCategories(!showAllCategories)}
+              className="text-sm text-[#0F9D58] font-medium"
             >
-              {category.label} ({category.count})
+              {showAllCategories ? 'Show Less' : 'View All'}
             </button>
-          ))}
+          </div>
+          
+          <div className="overflow-x-auto pb-2 scrollbar-hide">
+            <div className="flex space-x-3 min-w-max">
+              {(showAllCategories ? categories : categories.slice(0, 5)).map((category) => (
+                <button
+                  key={category.value}
+                  onClick={() => setSelectedCategory(category.value)}
+                  className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all ${
+                    selectedCategory === category.value
+                      ? 'bg-[#0F9D58] text-white shadow-md'
+                      : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:border-[#0F9D58]'
+                  }`}
+                >
+                  {category.label} ({category.count})
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
 
         {/* Featured Products Section */}
@@ -158,7 +174,7 @@ const StorePage: React.FC = () => {
               <span className="text-sm text-[#0F9D58] font-medium">Limited Time Offers</span>
             </div>
             
-            <div className="grid grid-cols-2 gap-4 mb-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
               {featuredProducts.map((product) => (
                 <div key={product.id} className="relative">
                   <ProductCard product={product} />
@@ -190,7 +206,7 @@ const StorePage: React.FC = () => {
           </div>
           
           {filteredProducts.length > 0 ? (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 max-h-[calc(100vh-300px)] overflow-y-auto">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 overflow-y-auto max-h-[calc(100vh-300px)]">
               {filteredProducts.map((product) => (
                 <div key={product.id} className="relative">
                   <ProductCard product={product} />
