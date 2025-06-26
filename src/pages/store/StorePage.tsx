@@ -95,13 +95,13 @@ const StorePage: React.FC = () => {
         </div>
         
         {/* Search Bar */}
-        <div className="relative mb-4">
+        <div className="relative mb-4 w-full">
           <Input
             placeholder="Search products, brands, categories..."
             leftIcon={<Search size={16} />}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pr-12"
+            className="pr-12 w-full"
           />
           <button
             onClick={() => setShowFilters(!showFilters)}
@@ -147,8 +147,8 @@ const StorePage: React.FC = () => {
             </button>
           </div>
           
-          <div className="overflow-x-auto pb-2 scrollbar-hide">
-            <div className="flex space-x-3 min-w-max">
+          <div className="overflow-x-auto pb-2">
+            <div className="flex space-x-3 min-w-max flex-nowrap">
               {(showAllCategories ? categories : categories.slice(0, 5)).map((category) => (
                 <button
                   key={category.value}
@@ -206,7 +206,7 @@ const StorePage: React.FC = () => {
           </div>
           
           {filteredProducts.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 overflow-y-auto max-h-[calc(100vh-300px)]">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {filteredProducts.map((product) => (
                 <div key={product.id} className="relative">
                   <ProductCard product={product} />
@@ -255,7 +255,7 @@ const StorePage: React.FC = () => {
         </div>
 
         {/* Promotional Banner */}
-        <div className="bg-gradient-to-r from-[#0F9D58] to-[#0d8a4f] rounded-2xl p-6 text-white">
+        <div className="bg-gradient-to-r from-[#0F9D58] to-[#0d8a4f] rounded-2xl p-6 text-white w-full">
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-xl font-bold mb-2">Free Delivery</h3>
