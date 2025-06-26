@@ -134,7 +134,7 @@ const StorePage: React.FC = () => {
 
       <div className="p-4 space-y-6">
         {/* Categories */}
-        <div className="flex overflow-x-auto pb-2 space-x-3 scrollbar-hide flex-nowrap">
+        <div className="flex overflow-x-auto pb-2 space-x-3 scrollbar-hide">
           {categories.map((category) => (
             <button
               key={category.value}
@@ -190,7 +190,7 @@ const StorePage: React.FC = () => {
           </div>
           
           {filteredProducts.length > 0 ? (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 overflow-y-auto">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 max-h-[calc(100vh-300px)] overflow-y-auto">
               {filteredProducts.map((product) => (
                 <div key={product.id} className="relative">
                   <ProductCard product={product} />

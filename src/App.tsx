@@ -26,6 +26,7 @@ import ComingSoonPage from './pages/ComingSoonPage';
 import AdminLoginPage from './pages/admin/AdminLoginPage';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import ProductsManagement from './pages/admin/ProductsManagement';
+import ProductCategoriesManagement from './pages/admin/ProductCategoriesManagement';
 import UsersManagement from './pages/admin/UsersManagement';
 import TransactionsManagement from './pages/admin/TransactionsManagement';
 import AdminSettings from './pages/admin/AdminSettings';
@@ -37,11 +38,23 @@ import VirtualAccountManagement from './pages/admin/VirtualAccountManagement';
 import { useAuthStore } from './store/authStore';
 
 function App() {
-  const { checkAuth, isAuthenticated } = useAuthStore();
+  const { checkAuth, isAuthenticated, user, initRealtimeSubscription, cleanupRealtimeSubscription } = useAuthStore();
 
   useEffect(() => {
     checkAuth();
-  }, [checkAuth]);
+    
+    // Cleanup function
+    return () => {
+      cleanupRealtimeSubscription();
+    };
+  }, [checkAuth, cleanupRealtimeSubscription]);
+  
+  // Initialize realtime subscription when user is authenticated
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      initRealtimeSubscription();
+    }
+  }, [isAuthenticated, user, initRealtimeSubscription]);
 
   return (
     <Router>
@@ -50,6 +63,7 @@ function App() {
         <Route path="/admin/login" element={<AdminLoginPage />} />
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
         <Route path="/admin/products" element={<ProductsManagement />} />
+        <Route path="/admin/product-categories" element={<ProductCategoriesManagement />} />
         <Route path="/admin/users" element={<UsersManagement />} />
         <Route path="/admin/transactions" element={<TransactionsManagement />} />
         <Route path="/admin/orders" element={<OrdersManagement />} />

@@ -33,10 +33,18 @@ type Product = {
   created_at: string;
 };
 
+type ProductCategory = {
+  id: string;
+  name: string;
+  description: string;
+  is_active: boolean;
+};
+
 const ProductsManagement: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<ProductCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -61,6 +69,7 @@ const ProductsManagement: React.FC = () => {
       return;
     }
     fetchProducts();
+    fetchCategories();
   }, [user, navigate]);
 
   const fetchProducts = async () => {
@@ -76,6 +85,27 @@ const ProductsManagement: React.FC = () => {
       console.error('Error fetching products:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchCategories = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('product_categories')
+        .select('id, name, description, is_active')
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true })
+        .order('name', { ascending: true });
+
+      if (error) throw error;
+      setCategories(data || []);
+      
+      // Set default category if available
+      if (data && data.length > 0 && !formData.category) {
+        setFormData(prev => ({ ...prev, category: data[0].name }));
+      }
+    } catch (error) {
+      console.error('Error fetching categories:', error);
     }
   };
 
@@ -176,7 +206,7 @@ const ProductsManagement: React.FC = () => {
       price: '',
       original_price: '',
       image_url: '',
-      category: 'Electronics',
+      category: categories.length > 0 ? categories[0].name : 'Electronics',
       in_stock: true,
       is_new: false,
       is_featured: false,
@@ -190,7 +220,7 @@ const ProductsManagement: React.FC = () => {
     return matchesSearch && matchesCategory;
   });
 
-  const categories = ['all', ...Array.from(new Set(products.map(p => p.category)))];
+  const categoryOptions = ['all', ...Array.from(new Set(products.map(p => p.category)))];
 
   if (loading) {
     return (
@@ -219,17 +249,27 @@ const ProductsManagement: React.FC = () => {
               </div>
             </div>
             
-            <button
-              onClick={() => {
-                resetForm();
-                setEditingProduct(null);
-                setShowAddModal(true);
-              }}
-              className="flex items-center px-4 py-2 bg-[#0F9D58] text-white rounded-lg hover:bg-[#0d8a4f] transition-colors"
-            >
-              <Plus size={16} className="mr-2" />
-              Add Product
-            </button>
+            <div className="flex space-x-3">
+              <button
+                onClick={() => navigate('/admin/product-categories')}
+                className="flex items-center px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+              >
+                <Filter size={16} className="mr-2" />
+                Manage Categories
+              </button>
+              
+              <button
+                onClick={() => {
+                  resetForm();
+                  setEditingProduct(null);
+                  setShowAddModal(true);
+                }}
+                className="flex items-center px-4 py-2 bg-[#0F9D58] text-white rounded-lg hover:bg-[#0d8a4f] transition-colors"
+              >
+                <Plus size={16} className="mr-2" />
+                Add Product
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -254,9 +294,10 @@ const ProductsManagement: React.FC = () => {
               onChange={(e) => setSelectedCategory(e.target.value)}
               className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0F9D58]"
             >
+              <option value="all">All Categories</option>
               {categories.map(category => (
-                <option key={category} value={category}>
-                  {category === 'all' ? 'All Categories' : category}
+                <option key={category.id} value={category.name}>
+                  {category.name}
                 </option>
               ))}
             </select>
@@ -276,9 +317,11 @@ const ProductsManagement: React.FC = () => {
                 <img
                   src={product.image_url}
                   alt={product.name}
-                  className="w-full h-48 object-cover"
+                  className="w-full h-48 sm:h-80 object-cover"
                 />
-                <div className="absolute top-2 left-2 flex flex-col space-y-1">
+                
+                {/* Badges */}
+                <div className="absolute top-4 left-4 flex flex-col space-y-2">
                   {product.is_new && (
                     <span className="bg-[#0F9D58] text-white text-xs px-2 py-1 rounded-full font-bold">
                       NEW
@@ -289,19 +332,17 @@ const ProductsManagement: React.FC = () => {
                       FEATURED
                     </span>
                   )}
-                </div>
-                {product.discount > 0 && (
-                  <div className="absolute top-2 right-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full font-bold">
-                    -{product.discount}%
-                  </div>
-                )}
-                <div className="absolute bottom-2 right-2 flex space-x-1">
-                  {product.in_stock ? (
-                    <Eye className="text-green-500 bg-white rounded-full p-1" size={24} />
-                  ) : (
-                    <EyeOff className="text-red-500 bg-white rounded-full p-1" size={24} />
+                  {product.discount > 0 && (
+                    <span className="bg-red-500 text-white text-xs px-2 py-1 rounded-full font-bold">
+                      -{product.discount}%
+                    </span>
                   )}
                 </div>
+
+                {/* Wishlist Button */}
+                <button className="absolute top-4 right-4 p-3 bg-white/80 backdrop-blur-sm rounded-full hover:bg-white transition-colors">
+                  <Heart size={20} className="text-gray-600" />
+                </button>
               </div>
               
               <div className="p-4">
@@ -312,7 +353,7 @@ const ProductsManagement: React.FC = () => {
                   <div className="flex items-center">
                     <Star className="text-yellow-400 fill-current" size={12} />
                     <span className="text-xs text-gray-600 dark:text-gray-400 ml-1">
-                      {product.rating} ({product.reviews})
+                      {product.rating} ({product.reviews} reviews)
                     </span>
                   </div>
                 </div>
@@ -409,11 +450,11 @@ const ProductsManagement: React.FC = () => {
                     onChange={(e) => setFormData({...formData, category: e.target.value})}
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0F9D58]"
                   >
-                    <option value="Electronics">Electronics</option>
-                    <option value="Gaming">Gaming</option>
-                    <option value="Accessories">Accessories</option>
-                    <option value="Mobile">Mobile</option>
-                    <option value="Computers">Computers</option>
+                    {categories.map(category => (
+                      <option key={category.id} value={category.name}>
+                        {category.name}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>

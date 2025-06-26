@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, ShoppingBag, DollarSign, TrendingUp, Settings, Package, CreditCard, Activity, LogOut, Eye, Plus, Wallet, Wifi, Ban as Bank } from 'lucide-react';
+import { Users, ShoppingBag, DollarSign, TrendingUp, Settings, Package, CreditCard, Activity, LogOut, Eye, Plus, Wallet, Wifi, Ban as Bank, Tag } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../store/authStore';
 import { formatCurrency } from '../../lib/utils';
@@ -203,6 +203,13 @@ const AdminDashboard: React.FC = () => {
       icon: Package,
       path: '/admin/products',
       color: 'bg-blue-500',
+    },
+    {
+      title: 'Categories',
+      description: 'Manage product categories',
+      icon: Tag,
+      path: '/admin/product-categories',
+      color: 'bg-indigo-500',
     },
     {
       title: 'Users',

@@ -9,6 +9,7 @@ type AuthState = {
   user: AuthUser | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  realtimeSubscription: any | null;
   login: (email: string, password: string) => Promise<void>;
   signup: (email: string, password: string, name: string, phone?: string, referralCode?: string, bvn?: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -17,6 +18,8 @@ type AuthState = {
   checkAuth: () => Promise<void>;
   refreshUserData: () => Promise<void>;
   createVirtualAccount: (userId: string, email: string, firstName: string, lastName: string, phoneNumber?: string, bvn?: string) => Promise<void>;
+  initRealtimeSubscription: () => void;
+  cleanupRealtimeSubscription: () => void;
 };
 
 export const useAuthStore = create<AuthState>()(
@@ -25,6 +28,7 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       isAuthenticated: false,
       isLoading: false,
+      realtimeSubscription: null,
 
       login: async (email: string, password: string) => {
         set({ isLoading: true });
@@ -99,6 +103,9 @@ export const useAuthStore = create<AuthState>()(
                       isAuthenticated: true,
                       isLoading: false,
                     });
+                    
+                    // Initialize realtime subscription
+                    get().initRealtimeSubscription();
                   } else {
                     throw insertError;
                   }
@@ -124,6 +131,9 @@ export const useAuthStore = create<AuthState>()(
                     isAuthenticated: true,
                     isLoading: false,
                   });
+                  
+                  // Initialize realtime subscription
+                  get().initRealtimeSubscription();
                 }
               } else {
                 // For other errors, throw them
@@ -151,6 +161,9 @@ export const useAuthStore = create<AuthState>()(
                 isAuthenticated: true,
                 isLoading: false,
               });
+              
+              // Initialize realtime subscription
+              get().initRealtimeSubscription();
             }
           }
         } catch (error: any) {
@@ -194,6 +207,7 @@ export const useAuthStore = create<AuthState>()(
                 console.error('Error finding referrer:', referrerError);
               } else if (referrer) {
                 referrerProfile = referrer;
+                console.log('Found referrer profile:', referrer);
               } else {
                 console.warn('Referral code not found:', referralCode);
               }
@@ -214,6 +228,8 @@ export const useAuthStore = create<AuthState>()(
               created_at: new Date().toISOString(),
               bvn: bvn || null,
             };
+
+            console.log('Creating profile with data:', { ...profile, referred_by: referrerProfile?.id || 'null' });
 
             const { data: insertedProfile, error: profileError } = await supabase
               .from('profiles')
@@ -253,6 +269,9 @@ export const useAuthStore = create<AuthState>()(
                   isAuthenticated: true,
                   isLoading: false,
                 });
+                
+                // Initialize realtime subscription
+                get().initRealtimeSubscription();
                 return;
               } else {
                 throw profileError;
@@ -261,14 +280,21 @@ export const useAuthStore = create<AuthState>()(
 
             // Update referrer's total referrals count
             if (referrerProfile) {
+              console.log('Updating referrer profile:', referrerProfile.id);
               const newTotalReferrals = (referrerProfile.total_referrals || 0) + 1;
               
-              await supabase
+              const { error: updateError } = await supabase
                 .from('profiles')
                 .update({ 
                   total_referrals: newTotalReferrals
                 })
                 .eq('id', referrerProfile.id);
+                
+              if (updateError) {
+                console.error('Error updating referrer profile:', updateError);
+              } else {
+                console.log('Successfully updated referrer profile with new total:', newTotalReferrals);
+              }
                 
               // Log the referral
               await supabase.from('admin_logs').insert([{
@@ -308,6 +334,9 @@ export const useAuthStore = create<AuthState>()(
               isAuthenticated: true,
               isLoading: false,
             });
+            
+            // Initialize realtime subscription
+            get().initRealtimeSubscription();
 
             // Create virtual account if BVN is provided
             if (bvn) {
@@ -338,6 +367,9 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: async () => {
+        // Clean up realtime subscription
+        get().cleanupRealtimeSubscription();
+        
         await supabase.auth.signOut();
         set({ user: null, isAuthenticated: false });
       },
@@ -491,6 +523,9 @@ export const useAuthStore = create<AuthState>()(
                     },
                     isAuthenticated: true,
                   });
+                  
+                  // Initialize realtime subscription
+                  get().initRealtimeSubscription();
                 }
               }
             } else if (insertedProfile) {
@@ -514,6 +549,9 @@ export const useAuthStore = create<AuthState>()(
                 },
                 isAuthenticated: true,
               });
+              
+              // Initialize realtime subscription
+              get().initRealtimeSubscription();
             }
           } else if (profile) {
             set({
@@ -536,9 +574,14 @@ export const useAuthStore = create<AuthState>()(
               },
               isAuthenticated: true,
             });
+            
+            // Initialize realtime subscription
+            get().initRealtimeSubscription();
           }
         } else {
           set({ user: null, isAuthenticated: false });
+          // Clean up any existing subscription
+          get().cleanupRealtimeSubscription();
         }
       },
 
@@ -591,6 +634,66 @@ export const useAuthStore = create<AuthState>()(
         } catch (error) {
           console.error('Error creating virtual account:', error);
           throw error;
+        }
+      },
+      
+      // New function to initialize realtime subscription
+      initRealtimeSubscription: () => {
+        const state = get();
+        
+        // Clean up any existing subscription first
+        get().cleanupRealtimeSubscription();
+        
+        if (!state.user) return;
+        
+        try {
+          console.log('Initializing realtime subscription for user:', state.user.id);
+          
+          // Subscribe to changes in the profiles table for the current user
+          const subscription = supabase
+            .channel('profile-changes')
+            .on(
+              'postgres_changes',
+              {
+                event: 'UPDATE',
+                schema: 'public',
+                table: 'profiles',
+                filter: `id=eq.${state.user.id}`,
+              },
+              (payload) => {
+                console.log('Received realtime update:', payload);
+                
+                // Update the user's wallet balance in the local state
+                if (payload.new && payload.new.wallet_balance !== undefined) {
+                  console.log('Updating wallet balance from realtime event:', payload.new.wallet_balance);
+                  
+                  set((state) => ({
+                    user: state.user ? {
+                      ...state.user,
+                      walletBalance: payload.new.wallet_balance,
+                    } : null,
+                  }));
+                }
+              }
+            )
+            .subscribe();
+          
+          // Store the subscription for later cleanup
+          set({ realtimeSubscription: subscription });
+          
+        } catch (error) {
+          console.error('Error setting up realtime subscription:', error);
+        }
+      },
+      
+      // Function to clean up realtime subscription
+      cleanupRealtimeSubscription: () => {
+        const { realtimeSubscription } = get();
+        
+        if (realtimeSubscription) {
+          console.log('Cleaning up realtime subscription');
+          supabase.removeChannel(realtimeSubscription);
+          set({ realtimeSubscription: null });
         }
       },
     }),

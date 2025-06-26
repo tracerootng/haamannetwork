@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { PlusCircle, ArrowUpRight, ArrowDownRight, History } from 'lucide-react';
+import { PlusCircle, ArrowUpRight, ArrowDownRight, History, RefreshCw } from 'lucide-react';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
@@ -51,13 +51,13 @@ const WalletPage: React.FC = () => {
   const { user, isAuthenticated, refreshUserData } = useAuthStore();
   const [recentTransactions, setRecentTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     if (isAuthenticated && user) {
-      refreshUserData();
       fetchRecentTransactions();
     }
-  }, [isAuthenticated, user, refreshUserData]);
+  }, [isAuthenticated, user]);
 
   const fetchRecentTransactions = async () => {
     if (!user) return;
@@ -76,6 +76,20 @@ const WalletPage: React.FC = () => {
       console.error('Error fetching recent transactions:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleRefresh = async () => {
+    if (!user) return;
+    
+    setRefreshing(true);
+    try {
+      await refreshUserData();
+      await fetchRecentTransactions();
+    } catch (error) {
+      console.error('Error refreshing data:', error);
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -107,13 +121,24 @@ const WalletPage: React.FC = () => {
             </p>
           </div>
           
-          <Button
-            variant="primary"
-            icon={<PlusCircle size={16} />}
-            onClick={() => navigate('/wallet/fund')}
-          >
-            Fund Wallet
-          </Button>
+          <div className="flex space-x-2">
+            <Button
+              variant="outline"
+              icon={<RefreshCw size={16} className={refreshing ? "animate-spin" : ""} />}
+              onClick={handleRefresh}
+              disabled={refreshing}
+            >
+              {refreshing ? "Refreshing..." : "Refresh"}
+            </Button>
+            
+            <Button
+              variant="primary"
+              icon={<PlusCircle size={16} />}
+              onClick={() => navigate('/wallet/fund')}
+            >
+              Fund Wallet
+            </Button>
+          </div>
         </div>
         
         <div className="grid grid-cols-2 gap-4 mt-6">
