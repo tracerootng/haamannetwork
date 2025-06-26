@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Copy, Share2, Users, Gift, TrendingUp, Award, ArrowLeft, CheckCircle, User, AlertCircle } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { formatCurrency } from '../../lib/utils';
@@ -186,7 +186,7 @@ const ReferEarnPage: React.FC = () => {
         <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white ml-4">Refer & Earn</h1>
       </div>
 
-      <div className="p-4 space-y-6 max-w-[250px] mx-auto">
+      <div className="p-4 space-y-6 max-w-md mx-auto">
         {/* Hero Section */}
         <div className="bg-gradient-to-br from-[#0F9D58] to-[#0d8a4f] rounded-2xl p-6 text-white relative overflow-hidden">
           {/* Background Pattern */}

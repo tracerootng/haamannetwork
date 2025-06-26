@@ -57,6 +57,7 @@ const SignupPage: React.FC = () => {
     setIsCheckingReferralCode(true);
     try {
       const isValid = await verifyReferralCode(code);
+      console.log('Referral code verification result:', isValid);
       setIsValidReferralCode(isValid);
     } catch (error) {
       console.error('Error checking referral code:', error);
