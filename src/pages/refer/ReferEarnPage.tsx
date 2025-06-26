@@ -70,20 +70,18 @@ const ReferEarnPage: React.FC = () => {
         .from('admin_settings')
         .select('value')
         .eq('key', 'referral_bonus_percentage')
-        .single();
+        .maybeSingle();
       
       if (settingsError) {
-        if (settingsError.code === 'PGRST116') {
-          // If no setting found, use default value
-          console.log('No referral bonus percentage setting found, using default value');
-        } else {
-          console.error('Error fetching referral bonus percentage:', settingsError);
-        }
+        console.error('Error fetching referral bonus percentage:', settingsError);
       } else if (settingsData) {
         setReferralStats(prev => ({
           ...prev,
           bonusPercentage: parseFloat(settingsData.value) || 6
         }));
+      } else {
+        // No setting found, use default value
+        console.log('No referral bonus percentage setting found, using default value');
       }
       
       // Get user's current stats from the user object in the store
