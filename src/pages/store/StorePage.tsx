@@ -137,7 +137,7 @@ const StorePage: React.FC = () => {
         )}
       </div>
 
-      <div className="p-4 space-y-6 max-w-[250px] mx-auto">
+      <div className="p-4 space-y-6 max-w-[350px] mx-auto">
         {/* Categories */}
         <div className="mb-2">
           <div className="flex justify-between items-center mb-2">
