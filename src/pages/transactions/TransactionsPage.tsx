@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowUpRight, ArrowDownRight, Download, Search, Filter, BarChart2, Trophy, Users, Calendar, ChevronDown, ChevronUp, Crown } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, Download, Search, Filter, BarChart2, Trophy, Users, Calendar, ChevronDown, ChevronUp, Crown, Eye } from 'lucide-react';
 import Card from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
@@ -10,6 +10,7 @@ import { useAuthStore } from '../../store/authStore';
 import { supabase } from '../../lib/supabase';
 import { formatCurrency, formatDate, formatDateTime, getStatusColor } from '../../lib/utils';
 import { jsPDF } from 'jspdf';
+import TransactionDetailModal from '../../components/transactions/TransactionDetailModal';
 
 type Transaction = {
   id: string;
@@ -51,6 +52,15 @@ type LeaderboardEntry = {
   name: string;
   network: string;
   total_amount: number;
+  rank: number;
+  is_current_user: boolean;
+};
+
+type ReferralLeaderboardEntry = {
+  user_id: string;
+  name: string;
+  total_referrals: number;
+  referral_earnings: number;
   rank: number;
   is_current_user: boolean;
 };
@@ -210,10 +220,17 @@ const TransactionsPage: React.FC = () => {
     }
   });
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [referralLeaderboard, setReferralLeaderboard] = useState<ReferralLeaderboardEntry[]>([]);
   const [beneficiaries, setBeneficiaries] = useState<Beneficiary[]>([]);
   const [loadingStats, setLoadingStats] = useState(false);
   const [loadingLeaderboard, setLoadingLeaderboard] = useState(false);
+  const [loadingReferralLeaderboard, setLoadingReferralLeaderboard] = useState(false);
   const [loadingBeneficiaries, setLoadingBeneficiaries] = useState(false);
+  const [leaderboardType, setLeaderboardType] = useState<'data_usage' | 'referral_earners'>('data_usage');
+  
+  // Transaction detail modal state
+  const [selectedTransactionDetail, setSelectedTransactionDetail] = useState<Transaction | null>(null);
+  const [showDetailModal, setShowDetailModal] = useState(false);
 
   useEffect(() => {
     if (isAuthenticated && user) {
@@ -223,10 +240,14 @@ const TransactionsPage: React.FC = () => {
   }, [isAuthenticated, user]);
 
   useEffect(() => {
-    if (showLeaderboard && !leaderboard.length) {
-      fetchLeaderboard();
+    if (showLeaderboard) {
+      if (leaderboardType === 'data_usage' && !leaderboard.length) {
+        fetchLeaderboard();
+      } else if (leaderboardType === 'referral_earners' && !referralLeaderboard.length) {
+        fetchReferralLeaderboard();
+      }
     }
-  }, [showLeaderboard]);
+  }, [showLeaderboard, leaderboardType]);
 
   const fetchTransactions = async () => {
     if (!user) return;
@@ -285,12 +306,14 @@ const TransactionsPage: React.FC = () => {
           const network = transaction.details?.network;
           
           if (phone && network && !beneficiaryMap.has(phone)) {
+            // Ensure network is uppercase to match networkProviders
+            const formattedNetwork = network.toUpperCase();
             beneficiaryMap.set(phone, {
               id: transaction.id,
               user_id: user.id,
-              name: `Beneficiary (${network})`,
+              name: `Beneficiary (${formattedNetwork})`,
               phone_number: phone,
-              network: network,
+              network: formattedNetwork,
               type: transaction.type as 'airtime' | 'data',
               created_at: transaction.created_at
             });
@@ -483,6 +506,49 @@ const TransactionsPage: React.FC = () => {
     }
   };
   
+  const fetchReferralLeaderboard = async () => {
+    if (!user) return;
+    
+    setLoadingReferralLeaderboard(true);
+    try {
+      // Fetch profiles ordered by referral_earnings
+      const { data: profiles, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, name, total_referrals, referral_earnings')
+        .order('referral_earnings', { ascending: false })
+        .limit(50);  // Limit to a reasonable number
+        
+      if (profilesError) throw profilesError;
+      
+      // Format the data for the leaderboard
+      const leaderboardData: ReferralLeaderboardEntry[] = [];
+      
+      profiles?.forEach((profile, index) => {
+        // Only include users with referrals
+        if (profile.total_referrals > 0 || profile.referral_earnings > 0) {
+          leaderboardData.push({
+            user_id: profile.id,
+            // Mask the name for privacy, except for current user
+            name: profile.id === user.id 
+              ? `${profile.name} (You)` 
+              : `${profile.name.split(' ')[0]} ${profile.name.split(' ')[1]?.charAt(0) || ''}`,
+            total_referrals: profile.total_referrals || 0,
+            referral_earnings: profile.referral_earnings || 0,
+            rank: index + 1,
+            is_current_user: profile.id === user.id
+          });
+        }
+      });
+      
+      // Take top 10
+      setReferralLeaderboard(leaderboardData.slice(0, 10));
+    } catch (error) {
+      console.error('Error fetching referral leaderboard:', error);
+    } finally {
+      setLoadingReferralLeaderboard(false);
+    }
+  };
+  
   const filteredTransactions = transactions.filter((transaction) => {
     const matchesSearch = getTransactionLabel(transaction.type, transaction.details)
       .toLowerCase()
@@ -529,13 +595,22 @@ const TransactionsPage: React.FC = () => {
   
   const toggleLeaderboard = () => {
     setShowLeaderboard(!showLeaderboard);
-    if (!showLeaderboard && !loadingLeaderboard) {
-      fetchLeaderboard();
+    if (!showLeaderboard) {
+      if (leaderboardType === 'data_usage' && !leaderboard.length) {
+        fetchLeaderboard();
+      } else if (leaderboardType === 'referral_earners' && !referralLeaderboard.length) {
+        fetchReferralLeaderboard();
+      }
     }
   };
   
   const toggleBeneficiaries = () => {
     setShowBeneficiaries(!showBeneficiaries);
+  };
+  
+  const handleViewTransactionDetail = (transaction: Transaction) => {
+    setSelectedTransactionDetail(transaction);
+    setShowDetailModal(true);
   };
 
   if (!isAuthenticated) {
@@ -727,106 +802,214 @@ const TransactionsPage: React.FC = () => {
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold flex items-center">
               <Trophy className="mr-2 text-[#0F9D58]" size={20} />
-              Data Usage Leaderboard
+              Leaderboard
             </h2>
-            <Select
-              options={networkOptions}
-              value={selectedNetwork}
-              onChange={(e) => {
-                setSelectedNetwork(e.target.value);
-                // Refresh leaderboard when network filter changes
-                if (showLeaderboard) {
-                  fetchLeaderboard();
-                }
-              }}
-              className="w-40"
-            />
+            
+            {/* Leaderboard Type Selector */}
+            <div className="flex bg-gray-200 dark:bg-gray-700 rounded-lg p-1">
+              <button
+                onClick={() => setLeaderboardType('data_usage')}
+                className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                  leaderboardType === 'data_usage'
+                    ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm'
+                    : 'text-gray-600 dark:text-gray-400'
+                }`}
+              >
+                Data Usage
+              </button>
+              <button
+                onClick={() => setLeaderboardType('referral_earners')}
+                className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                  leaderboardType === 'referral_earners'
+                    ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm'
+                    : 'text-gray-600 dark:text-gray-400'
+                }`}
+              >
+                Referral Earners
+              </button>
+            </div>
           </div>
           
-          {loadingLeaderboard ? (
-            <div className="flex justify-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#0F9D58]"></div>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {leaderboard.map((entry, index) => (
-                <div 
-                  key={entry.user_id} 
-                  className={`relative rounded-lg p-4 ${
-                    index === 0 
-                      ? 'bg-gradient-to-r from-yellow-50 to-yellow-100 dark:from-yellow-900/20 dark:to-yellow-800/20 border border-yellow-200 dark:border-yellow-800' 
-                      : index === 1
-                      ? 'bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800/50 dark:to-gray-700/50 border border-gray-200 dark:border-gray-700'
-                      : index === 2
-                      ? 'bg-gradient-to-r from-amber-50 to-amber-100 dark:from-amber-900/20 dark:to-amber-800/20 border border-amber-200 dark:border-amber-800'
-                      : 'bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600'
-                  }`}
-                >
-                  {/* Crown for top user */}
-                  {index === 0 && (
-                    <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
-                      <Crown className="text-yellow-500" size={24} />
-                    </div>
-                  )}
-                  
-                  <div className="flex items-center">
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-white ${
-                      index === 0 ? 'bg-yellow-500' : 
-                      index === 1 ? 'bg-gray-400' : 
-                      index === 2 ? 'bg-amber-600' : 
-                      'bg-gray-500'
-                    }`}>
-                      {entry.rank}
-                    </div>
-                    
-                    <div className="ml-3 flex-1">
-                      <div className="flex items-center">
-                        <p className="font-medium text-gray-900 dark:text-white">
-                          {entry.name}
-                        </p>
-                        {entry.is_current_user && (
-                          <Badge variant="success" className="ml-2 text-xs">You</Badge>
-                        )}
-                      </div>
-                      <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
-                        <div className={`w-2 h-2 rounded-full ${
-                          entry.network === 'mtn' ? 'bg-yellow-500' :
-                          entry.network === 'airtel' ? 'bg-red-500' :
-                          entry.network === 'glo' ? 'bg-green-500' :
-                          entry.network === '9mobile' ? 'bg-teal-500' :
-                          'bg-gray-500'
-                        } mr-1`}></div>
-                        <span className="capitalize">{entry.network}</span>
-                      </div>
-                    </div>
-                    
-                    <div className="text-right">
-                      <p className="font-bold text-[#0F9D58]">{formatCurrency(entry.total_amount)}</p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">total spent</p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-              
-              {leaderboard.length === 0 && (
-                <div className="text-center py-6 text-gray-500 dark:text-gray-400">
-                  No leaderboard data available for the selected network.
-                </div>
-              )}
-              
-              <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800 mt-4">
-                <div className="flex items-start">
-                  <Trophy className="text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" size={16} />
-                  <div className="ml-3">
-                    <p className="text-sm text-blue-800 dark:text-blue-200">
-                      The leaderboard shows the top 10 users based on their total spending on data bundles. 
-                      Privacy is important to us, so only partial names are displayed.
-                    </p>
-                  </div>
-                </div>
-              </div>
+          {/* Network Filter - Only show for data usage leaderboard */}
+          {leaderboardType === 'data_usage' && (
+            <div className="mb-4">
+              <Select
+                options={networkOptions}
+                value={selectedNetwork}
+                onChange={(e) => {
+                  setSelectedNetwork(e.target.value);
+                  // Refresh leaderboard when network filter changes
+                  if (showLeaderboard && leaderboardType === 'data_usage') {
+                    fetchLeaderboard();
+                  }
+                }}
+                className="w-full"
+              />
             </div>
           )}
+          
+          {/* Data Usage Leaderboard */}
+          {leaderboardType === 'data_usage' && (
+            <>
+              {loadingLeaderboard ? (
+                <div className="flex justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#0F9D58]"></div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {leaderboard.map((entry, index) => (
+                    <div 
+                      key={entry.user_id} 
+                      className={`relative rounded-lg p-4 ${
+                        index === 0 
+                          ? 'bg-gradient-to-r from-yellow-50 to-yellow-100 dark:from-yellow-900/20 dark:to-yellow-800/20 border border-yellow-200 dark:border-yellow-800' 
+                          : index === 1
+                          ? 'bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800/50 dark:to-gray-700/50 border border-gray-200 dark:border-gray-700'
+                          : index === 2
+                          ? 'bg-gradient-to-r from-amber-50 to-amber-100 dark:from-amber-900/20 dark:to-amber-800/20 border border-amber-200 dark:border-amber-800'
+                          : 'bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600'
+                      }`}
+                    >
+                      {/* Crown for top user */}
+                      {index === 0 && (
+                        <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                          <Crown className="text-yellow-500" size={24} />
+                        </div>
+                      )}
+                      
+                      <div className="flex items-center">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-white ${
+                          index === 0 ? 'bg-yellow-500' : 
+                          index === 1 ? 'bg-gray-400' : 
+                          index === 2 ? 'bg-amber-600' : 
+                          'bg-gray-500'
+                        }`}>
+                          {entry.rank}
+                        </div>
+                        
+                        <div className="ml-3 flex-1">
+                          <div className="flex items-center">
+                            <p className="font-medium text-gray-900 dark:text-white">
+                              {entry.name}
+                            </p>
+                            {entry.is_current_user && (
+                              <Badge variant="success" className="ml-2 text-xs">You</Badge>
+                            )}
+                          </div>
+                          <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
+                            <div className={`w-2 h-2 rounded-full ${
+                              entry.network === 'mtn' ? 'bg-yellow-500' :
+                              entry.network === 'airtel' ? 'bg-red-500' :
+                              entry.network === 'glo' ? 'bg-green-500' :
+                              entry.network === '9mobile' ? 'bg-teal-500' :
+                              'bg-gray-500'
+                            } mr-1`}></div>
+                            <span className="capitalize">{entry.network}</span>
+                          </div>
+                        </div>
+                        
+                        <div className="text-right">
+                          <p className="font-bold text-[#0F9D58]">{formatCurrency(entry.total_amount)}</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">total spent</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  
+                  {leaderboard.length === 0 && (
+                    <div className="text-center py-6 text-gray-500 dark:text-gray-400">
+                      No leaderboard data available for the selected network.
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+          
+          {/* Referral Earners Leaderboard */}
+          {leaderboardType === 'referral_earners' && (
+            <>
+              {loadingReferralLeaderboard ? (
+                <div className="flex justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#0F9D58]"></div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {referralLeaderboard.map((entry, index) => (
+                    <div 
+                      key={entry.user_id} 
+                      className={`relative rounded-lg p-4 ${
+                        index === 0 
+                          ? 'bg-gradient-to-r from-yellow-50 to-yellow-100 dark:from-yellow-900/20 dark:to-yellow-800/20 border border-yellow-200 dark:border-yellow-800' 
+                          : index === 1
+                          ? 'bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800/50 dark:to-gray-700/50 border border-gray-200 dark:border-gray-700'
+                          : index === 2
+                          ? 'bg-gradient-to-r from-amber-50 to-amber-100 dark:from-amber-900/20 dark:to-amber-800/20 border border-amber-200 dark:border-amber-800'
+                          : 'bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600'
+                      }`}
+                    >
+                      {/* Crown for top user */}
+                      {index === 0 && (
+                        <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                          <Crown className="text-yellow-500" size={24} />
+                        </div>
+                      )}
+                      
+                      <div className="flex items-center">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-white ${
+                          index === 0 ? 'bg-yellow-500' : 
+                          index === 1 ? 'bg-gray-400' : 
+                          index === 2 ? 'bg-amber-600' : 
+                          'bg-gray-500'
+                        }`}>
+                          {entry.rank}
+                        </div>
+                        
+                        <div className="ml-3 flex-1">
+                          <div className="flex items-center">
+                            <p className="font-medium text-gray-900 dark:text-white">
+                              {entry.name}
+                            </p>
+                            {entry.is_current_user && (
+                              <Badge variant="success" className="ml-2 text-xs">You</Badge>
+                            )}
+                          </div>
+                          <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
+                            <span>{entry.total_referrals} referrals</span>
+                          </div>
+                        </div>
+                        
+                        <div className="text-right">
+                          <p className="font-bold text-[#0F9D58]">{formatCurrency(entry.referral_earnings)}</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">total earned</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  
+                  {referralLeaderboard.length === 0 && (
+                    <div className="text-center py-6 text-gray-500 dark:text-gray-400">
+                      No referral leaderboard data available yet.
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+          
+          <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800 mt-4">
+            <div className="flex items-start">
+              <Trophy className="text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" size={16} />
+              <div className="ml-3">
+                <p className="text-sm text-blue-800 dark:text-blue-200">
+                  {leaderboardType === 'data_usage' 
+                    ? 'The leaderboard shows the top 10 users based on their total spending on data bundles.'
+                    : 'The leaderboard shows the top 10 users based on their referral earnings.'}
+                  {' '}Privacy is important to us, so only partial names are displayed.
+                </p>
+              </div>
+            </div>
+          </div>
         </Card>
       )}
       
@@ -990,14 +1173,26 @@ const TransactionsPage: React.FC = () => {
                       <Badge variant={getStatusColor(transaction.status) as any} className="text-xs">
                         {transaction.status}
                       </Badge>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="p-1"
-                        onClick={() => downloadReceipt(transaction)}
-                      >
-                        <Download size={14} />
-                      </Button>
+                      <div className="flex space-x-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="p-1"
+                          onClick={() => handleViewTransactionDetail(transaction)}
+                          title="View Details"
+                        >
+                          <Eye size={14} />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="p-1"
+                          onClick={() => downloadReceipt(transaction)}
+                          title="Download Receipt"
+                        >
+                          <Download size={14} />
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1015,6 +1210,15 @@ const TransactionsPage: React.FC = () => {
           </div>
         )}
       </Card>
+      
+      {/* Transaction Detail Modal */}
+      {showDetailModal && (
+        <TransactionDetailModal
+          transaction={selectedTransactionDetail}
+          onClose={() => setShowDetailModal(false)}
+          onDownload={downloadReceipt}
+        />
+      )}
     </div>
   );
 };

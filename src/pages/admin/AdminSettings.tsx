@@ -159,6 +159,11 @@ const AdminSettings: React.FC = () => {
         key: 'funding_charge_display_text',
         value: 'A service charge applies to wallet funding transactions.',
         description: 'Custom text to display to users about funding charges'
+      },
+      {
+        key: 'referral_invite_limit',
+        value: '5',
+        description: 'Maximum number of referrals a user can make before needing to claim a reward'
       }
     ];
 
@@ -267,6 +272,8 @@ const AdminSettings: React.FC = () => {
         return <Phone className="text-green-500" size={20} />;
       case 'referral_reward_cash_amount':
         return <CreditCard className="text-green-500" size={20} />;
+      case 'referral_invite_limit':
+        return <Users className="text-green-500" size={20} />;
       case 'funding_charge_enabled':
         return <ToggleRight className="text-blue-500" size={20} />;
       case 'funding_charge_type':
@@ -328,7 +335,7 @@ const AdminSettings: React.FC = () => {
     'Homepage Banners': ['hero_banner_image', 'hero_banner_image_alt', 'steps_banner_image'],
     'Homepage Content': ['hero_title', 'hero_subtitle', 'steps_title'],
     'Download App': ['download_app_enabled', 'download_app_url'],
-    'Referral System': ['referral_bonus_percentage', 'referral_reward_enabled', 'referral_reward_count', 'referral_reward_type', 'referral_reward_data_size', 'referral_reward_airtime_amount', 'referral_reward_cash_amount'],
+    'Referral System': ['referral_bonus_percentage', 'referral_reward_enabled', 'referral_reward_count', 'referral_reward_type', 'referral_reward_data_size', 'referral_reward_airtime_amount', 'referral_reward_cash_amount', 'referral_invite_limit'],
     'Funding Charges': ['funding_charge_enabled', 'funding_charge_type', 'funding_charge_value', 'funding_charge_min_deposit', 'funding_charge_max_deposit', 'funding_charge_display_text'],
     'Transaction Limits': ['min_transaction_amount', 'max_transaction_amount', 'max_wallet_balance'],
     'System': ['maintenance_mode'],
@@ -543,7 +550,7 @@ const AdminSettings: React.FC = () => {
                             placeholder="Enter URL"
                             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0F9D58]"
                           />
-                        ) : setting.key.includes('percentage') || setting.key.includes('amount') || setting.key.includes('balance') || setting.key === 'referral_reward_count' || setting.key === 'funding_charge_value' || setting.key === 'funding_charge_min_deposit' || setting.key === 'funding_charge_max_deposit' ? (
+                        ) : setting.key.includes('percentage') || setting.key.includes('amount') || setting.key.includes('balance') || setting.key === 'referral_reward_count' || setting.key === 'referral_invite_limit' || setting.key === 'funding_charge_value' || setting.key === 'funding_charge_min_deposit' || setting.key === 'funding_charge_max_deposit' ? (
                           <input
                             type="number"
                             value={formData[key] || setting.value}
@@ -608,6 +615,12 @@ const AdminSettings: React.FC = () => {
                         {setting.key === 'referral_reward_count' && (
                           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                             Number of referrals required to earn the data reward
+                          </p>
+                        )}
+
+                        {setting.key === 'referral_invite_limit' && (
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            Maximum number of referrals a user can make before needing to claim a reward
                           </p>
                         )}
 
