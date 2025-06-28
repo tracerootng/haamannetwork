@@ -6,6 +6,7 @@ import { formatCurrency } from '../../lib/utils';
 import { supabase } from '../../lib/supabase';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
+import SuccessModal from '../../components/ui/SuccessModal';
 
 type Referral = {
   id: string;
@@ -38,6 +39,8 @@ const ReferEarnPage: React.FC = () => {
   const [isVerifying, setIsVerifying] = useState(false);
   const [verificationResult, setVerificationResult] = useState<{valid: boolean, message: string} | null>(null);
   const [claimingReward, setClaimingReward] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successModalMessage, setSuccessModalMessage] = useState('');
   
   // Get referral code from user
   const referralCode = user ? user.referralCode : 'HN-XXXXXXXX';
@@ -333,7 +336,9 @@ const ReferEarnPage: React.FC = () => {
           break;
       }
       
-      alert(successMessage);
+      // Show success modal instead of alert
+      setSuccessModalMessage(successMessage);
+      setShowSuccessModal(true);
       
     } catch (error) {
       console.error('Error claiming reward:', error);
@@ -792,6 +797,14 @@ const ReferEarnPage: React.FC = () => {
           </ul>
         </div>
       </div>
+
+      {/* Success Modal */}
+      <SuccessModal
+        show={showSuccessModal}
+        title="Reward Claimed!"
+        message={successModalMessage}
+        onClose={() => setShowSuccessModal(false)}
+      />
     </div>
   );
 };
