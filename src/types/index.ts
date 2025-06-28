@@ -15,6 +15,7 @@ export type User = {
   virtualAccountNumber?: string;
   virtualAccountReference?: string;
   bvn?: string;
+  hasPin?: boolean;
 };
 
 export type Transaction = {

@@ -9,6 +9,7 @@ import { useAuthStore } from '../../store/authStore';
 import { serviceAPI } from '../../lib/serviceApi';
 import { formatCurrency } from '../../lib/utils';
 import { jsPDF } from 'jspdf';
+import TransactionPinModal from '../../components/ui/TransactionPinModal';
 
 type Beneficiary = {
   id: string;
@@ -88,6 +89,7 @@ const DataServicePage: React.FC = () => {
   const [isSuccess, setIsSuccess] = useState<boolean | null>(null);
   const [transaction, setTransaction] = useState<any>(null);
   const [errorMessage, setErrorMessage] = useState('');
+  const [showPinModal, setShowPinModal] = useState(false);
   
   // Data plans state
   const [dataPlans, setDataPlans] = useState<DataPlan[]>([]);
@@ -242,6 +244,22 @@ const DataServicePage: React.FC = () => {
       return;
     }
 
+    // Check if user has PIN set
+    if (user.hasPin) {
+      setShowPinModal(true);
+      return;
+    }
+
+    // If no PIN is set, proceed with payment
+    await processPayment();
+  };
+
+  const processPayment = async () => {
+    if (!user || !selectedPlan) {
+      navigate('/login');
+      return;
+    }
+
     setIsLoading(true);
     setErrorMessage('');
 
@@ -280,6 +298,7 @@ const DataServicePage: React.FC = () => {
       setStep(3);
     } finally {
       setIsLoading(false);
+      setShowPinModal(false);
     }
   };
   
@@ -1049,6 +1068,13 @@ const DataServicePage: React.FC = () => {
       {step === 1 && renderStepOne()}
       {step === 2 && renderStepTwo()}
       {step === 3 && renderStepThree()}
+
+      {/* Transaction PIN Modal */}
+      <TransactionPinModal
+        isOpen={showPinModal}
+        onClose={() => setShowPinModal(false)}
+        onSuccess={processPayment}
+      />
     </>
   );
 };

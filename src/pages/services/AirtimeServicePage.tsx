@@ -7,6 +7,7 @@ import { useAuthStore } from '../../store/authStore';
 import { serviceAPI } from '../../lib/serviceApi';
 import { formatCurrency } from '../../lib/utils';
 import { supabase } from '../../lib/supabase';
+import TransactionPinModal from '../../components/ui/TransactionPinModal';
 
 type Beneficiary = {
   id: string;
@@ -62,6 +63,7 @@ const AirtimeServicePage: React.FC = () => {
   const [beneficiaries, setBeneficiaries] = useState<Beneficiary[]>([]);
   const [showBeneficiaries, setShowBeneficiaries] = useState(false);
   const [loadingBeneficiaries, setLoadingBeneficiaries] = useState(false);
+  const [showPinModal, setShowPinModal] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -141,6 +143,17 @@ const AirtimeServicePage: React.FC = () => {
       return;
     }
 
+    // Check if user has PIN set
+    if (user.hasPin) {
+      setShowPinModal(true);
+      return;
+    }
+
+    // If no PIN is set, proceed with payment
+    await processPayment();
+  };
+
+  const processPayment = async () => {
     setIsLoading(true);
     setErrorMessage('');
 
@@ -196,6 +209,7 @@ const AirtimeServicePage: React.FC = () => {
       setStep(3);
     } finally {
       setIsLoading(false);
+      setShowPinModal(false);
     }
   };
 
@@ -725,6 +739,13 @@ const AirtimeServicePage: React.FC = () => {
       {step === 1 && renderStepOne()}
       {step === 2 && renderStepTwo()}
       {step === 3 && renderStepThree()}
+
+      {/* Transaction PIN Modal */}
+      <TransactionPinModal
+        isOpen={showPinModal}
+        onClose={() => setShowPinModal(false)}
+        onSuccess={processPayment}
+      />
     </>
   );
 };

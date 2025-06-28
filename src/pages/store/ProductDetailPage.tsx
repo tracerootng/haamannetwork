@@ -20,6 +20,7 @@ import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import { formatCurrency } from '../../lib/utils';
+import TransactionPinModal from '../../components/ui/TransactionPinModal';
 
 type Product = {
   id: string;
@@ -57,6 +58,7 @@ const ProductDetailPage: React.FC = () => {
     phone: user?.phone || '',
   });
   const [isProcessing, setIsProcessing] = useState(false);
+  const [showPinModal, setShowPinModal] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -100,6 +102,19 @@ const ProductDetailPage: React.FC = () => {
   const handleCheckout = async () => {
     if (!product || !user) return;
 
+    // Check if user has PIN set and is using wallet payment
+    if (user.hasPin && paymentMethod === 'wallet') {
+      setShowPinModal(true);
+      return;
+    }
+
+    // If no PIN is set or using pay on delivery, proceed with checkout
+    await processCheckout();
+  };
+
+  const processCheckout = async () => {
+    if (!product || !user) return;
+
     setIsProcessing(true);
     try {
       const totalAmount = product.price * quantity;
@@ -107,6 +122,7 @@ const ProductDetailPage: React.FC = () => {
       // Check wallet balance if paying with wallet
       if (paymentMethod === 'wallet' && user.walletBalance < totalAmount) {
         alert('Insufficient wallet balance. Please fund your wallet or choose pay on delivery.');
+        setIsProcessing(false);
         return;
       }
 
@@ -168,6 +184,7 @@ const ProductDetailPage: React.FC = () => {
       }
 
       setShowCheckoutModal(false);
+      setShowPinModal(false);
       navigate('/store/orders');
     } catch (error) {
       console.error('Error processing order:', error);
@@ -523,6 +540,13 @@ const ProductDetailPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Transaction PIN Modal */}
+      <TransactionPinModal
+        isOpen={showPinModal}
+        onClose={() => setShowPinModal(false)}
+        onSuccess={processCheckout}
+      />
     </div>
   );
 };

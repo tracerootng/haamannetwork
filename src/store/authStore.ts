@@ -21,6 +21,10 @@ type AuthState = {
   initRealtimeSubscription: () => void;
   cleanupRealtimeSubscription: () => void;
   verifyReferralCode: (code: string) => Promise<boolean>;
+  setTransactionPin: (pin: string, currentPin?: string) => Promise<void>;
+  verifyTransactionPin: (pin: string) => Promise<boolean>;
+  checkPinStatus: () => Promise<{hasPin: boolean, isLocked: boolean, lockedUntil: string | null}>;
+  resetTransactionPin: () => Promise<void>;
 };
 
 // Function to generate a random alphanumeric string for referral codes
@@ -113,6 +117,7 @@ export const useAuthStore = create<AuthState>()(
                         virtualAccountNumber: existingProfile.virtual_account_number,
                         virtualAccountReference: existingProfile.virtual_account_reference,
                         bvn: existingProfile.bvn,
+                        hasPin: !!existingProfile.transaction_pin,
                       },
                       isAuthenticated: true,
                       isLoading: false,
@@ -141,6 +146,7 @@ export const useAuthStore = create<AuthState>()(
                       virtualAccountNumber: insertedProfile.virtual_account_number,
                       virtualAccountReference: insertedProfile.virtual_account_reference,
                       bvn: insertedProfile.bvn,
+                      hasPin: false,
                     },
                     isAuthenticated: true,
                     isLoading: false,
@@ -171,6 +177,7 @@ export const useAuthStore = create<AuthState>()(
                   virtualAccountNumber: profile.virtual_account_number,
                   virtualAccountReference: profile.virtual_account_reference,
                   bvn: profile.bvn,
+                  hasPin: !!profile.transaction_pin,
                 },
                 isAuthenticated: true,
                 isLoading: false,
@@ -280,6 +287,7 @@ export const useAuthStore = create<AuthState>()(
                     virtualAccountNumber: existingProfile.virtual_account_number,
                     virtualAccountReference: existingProfile.virtual_account_reference,
                     bvn: existingProfile.bvn,
+                    hasPin: !!existingProfile.transaction_pin,
                   },
                   isAuthenticated: true,
                   isLoading: false,
@@ -342,6 +350,7 @@ export const useAuthStore = create<AuthState>()(
               virtualAccountNumber: insertedProfile.virtual_account_number,
               virtualAccountReference: insertedProfile.virtual_account_reference,
               bvn: insertedProfile.bvn,
+              hasPin: false,
             };
 
             set({
@@ -469,6 +478,7 @@ export const useAuthStore = create<AuthState>()(
                 virtualAccountNumber: profile.virtual_account_number,
                 virtualAccountReference: profile.virtual_account_reference,
                 bvn: profile.bvn,
+                hasPin: !!profile.transaction_pin,
               },
             });
           }
@@ -538,6 +548,7 @@ export const useAuthStore = create<AuthState>()(
                       virtualAccountNumber: existingProfile.virtual_account_number,
                       virtualAccountReference: existingProfile.virtual_account_reference,
                       bvn: existingProfile.bvn,
+                      hasPin: !!existingProfile.transaction_pin,
                     },
                     isAuthenticated: true,
                   });
@@ -564,6 +575,7 @@ export const useAuthStore = create<AuthState>()(
                   virtualAccountNumber: insertedProfile.virtual_account_number,
                   virtualAccountReference: insertedProfile.virtual_account_reference,
                   bvn: insertedProfile.bvn,
+                  hasPin: false,
                 },
                 isAuthenticated: true,
               });
@@ -589,6 +601,7 @@ export const useAuthStore = create<AuthState>()(
                 virtualAccountNumber: profile.virtual_account_number,
                 virtualAccountReference: profile.virtual_account_reference,
                 bvn: profile.bvn,
+                hasPin: !!profile.transaction_pin,
               },
               isAuthenticated: true,
             });
@@ -710,6 +723,16 @@ export const useAuthStore = create<AuthState>()(
                     } : null,
                   }));
                 }
+
+                // Update transaction PIN status if it's changed
+                if (payload.new && payload.new.transaction_pin !== undefined) {
+                  set((state) => ({
+                    user: state.user ? {
+                      ...state.user,
+                      hasPin: !!payload.new.transaction_pin,
+                    } : null,
+                  }));
+                }
               }
             )
             .subscribe();
@@ -759,6 +782,169 @@ export const useAuthStore = create<AuthState>()(
         } catch (error) {
           console.error('Error verifying referral code:', error);
           return false;
+        }
+      },
+
+      // Transaction PIN functions
+      setTransactionPin: async (pin: string, currentPin?: string) => {
+        const state = get();
+        if (!state.user) throw new Error('User not authenticated');
+
+        try {
+          const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+          if (!supabaseUrl) {
+            throw new Error('Supabase URL not configured');
+          }
+
+          const response = await fetch(`${supabaseUrl}/functions/v1/handle-pin`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+            },
+            body: JSON.stringify({
+              action: 'set_pin',
+              userId: state.user.id,
+              pin,
+              currentPin,
+            }),
+          });
+
+          const result = await response.json();
+          
+          if (!result.success) {
+            throw new Error(result.error || 'Failed to set transaction PIN');
+          }
+
+          // Update user state with PIN status
+          set((state) => ({
+            user: state.user ? {
+              ...state.user,
+              hasPin: true,
+            } : null,
+          }));
+        } catch (error) {
+          console.error('Error setting transaction PIN:', error);
+          throw error;
+        }
+      },
+
+      verifyTransactionPin: async (pin: string) => {
+        const state = get();
+        if (!state.user) throw new Error('User not authenticated');
+
+        try {
+          const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+          if (!supabaseUrl) {
+            throw new Error('Supabase URL not configured');
+          }
+
+          const response = await fetch(`${supabaseUrl}/functions/v1/handle-pin`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+            },
+            body: JSON.stringify({
+              action: 'verify_pin',
+              userId: state.user.id,
+              pin,
+            }),
+          });
+
+          const result = await response.json();
+          return result.success;
+        } catch (error) {
+          console.error('Error verifying transaction PIN:', error);
+          throw error;
+        }
+      },
+
+      checkPinStatus: async () => {
+        const state = get();
+        if (!state.user) throw new Error('User not authenticated');
+
+        try {
+          const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+          if (!supabaseUrl) {
+            throw new Error('Supabase URL not configured');
+          }
+
+          const response = await fetch(`${supabaseUrl}/functions/v1/handle-pin`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+            },
+            body: JSON.stringify({
+              action: 'check_pin_status',
+              userId: state.user.id,
+            }),
+          });
+
+          const result = await response.json();
+          
+          if (!result.success) {
+            throw new Error(result.error || 'Failed to check PIN status');
+          }
+
+          // Update user state with PIN status
+          set((state) => ({
+            user: state.user ? {
+              ...state.user,
+              hasPin: result.hasPin,
+            } : null,
+          }));
+
+          return {
+            hasPin: result.hasPin,
+            isLocked: result.isLocked,
+            lockedUntil: result.lockedUntil,
+          };
+        } catch (error) {
+          console.error('Error checking PIN status:', error);
+          throw error;
+        }
+      },
+
+      resetTransactionPin: async () => {
+        const state = get();
+        if (!state.user) throw new Error('User not authenticated');
+
+        try {
+          const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+          if (!supabaseUrl) {
+            throw new Error('Supabase URL not configured');
+          }
+
+          const response = await fetch(`${supabaseUrl}/functions/v1/handle-pin`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+            },
+            body: JSON.stringify({
+              action: 'reset_pin',
+              userId: state.user.id,
+            }),
+          });
+
+          const result = await response.json();
+          
+          if (!result.success) {
+            throw new Error(result.error || 'Failed to reset transaction PIN');
+          }
+
+          // Update user state with PIN status
+          set((state) => ({
+            user: state.user ? {
+              ...state.user,
+              hasPin: false,
+            } : null,
+          }));
+        } catch (error) {
+          console.error('Error resetting transaction PIN:', error);
+          throw error;
         }
       },
     }),

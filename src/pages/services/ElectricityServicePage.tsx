@@ -7,6 +7,7 @@ import { useAuthStore } from '../../store/authStore';
 import { serviceAPI } from '../../lib/serviceApi';
 import { formatCurrency } from '../../lib/utils';
 import { jsPDF } from 'jspdf';
+import TransactionPinModal from '../../components/ui/TransactionPinModal';
 
 const discos = [
   { value: 'ikeja', label: 'Ikeja Electric' },
@@ -41,6 +42,7 @@ const ElectricityServicePage: React.FC = () => {
   const [isSuccess, setIsSuccess] = useState<boolean | null>(null);
   const [transaction, setTransaction] = useState<any>(null);
   const [errorMessage, setErrorMessage] = useState('');
+  const [showPinModal, setShowPinModal] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -60,6 +62,17 @@ const ElectricityServicePage: React.FC = () => {
       return;
     }
 
+    // Check if user has PIN set
+    if (user.hasPin) {
+      setShowPinModal(true);
+      return;
+    }
+
+    // If no PIN is set, proceed with payment
+    await processPayment();
+  };
+
+  const processPayment = async () => {
     setIsLoading(true);
     setErrorMessage('');
 
@@ -98,6 +111,7 @@ const ElectricityServicePage: React.FC = () => {
       }
     } finally {
       setIsLoading(false);
+      setShowPinModal(false);
     }
   };
 
@@ -436,6 +450,13 @@ const ElectricityServicePage: React.FC = () => {
       {step === 1 && renderStepOne()}
       {step === 2 && renderStepTwo()}
       {step === 3 && renderStepThree()}
+
+      {/* Transaction PIN Modal */}
+      <TransactionPinModal
+        isOpen={showPinModal}
+        onClose={() => setShowPinModal(false)}
+        onSuccess={processPayment}
+      />
     </>
   );
 };
