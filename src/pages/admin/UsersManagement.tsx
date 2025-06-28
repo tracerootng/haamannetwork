@@ -152,32 +152,30 @@ const UsersManagement: React.FC = () => {
     
     setIsDeleting(true);
     try {
-      // First, log the action
-      await supabase.from('admin_logs').insert([{
-        admin_id: user?.id,
-        action: 'delete_user',
-        details: { 
-          user_id: selectedUser.id,
-          user_email: selectedUser.email,
-          user_name: selectedUser.name
-        },
-      }]);
+      // Get the current session token
+      const { data: { session } } = await supabase.auth.getSession();
       
-      // Delete the user from auth (this will cascade to profiles due to foreign key)
-      const { error } = await supabase.auth.admin.deleteUser(
-        selectedUser.id
-      );
+      if (!session?.access_token) {
+        throw new Error('No valid session found');
+      }
 
-      if (error) {
-        // If auth delete fails, try to delete just the profile
-        console.error('Error deleting user from auth:', error);
-        
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .delete()
-          .eq('id', selectedUser.id);
-          
-        if (profileError) throw profileError;
+      // Call the delete-user edge function
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-user`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: selectedUser.id,
+          adminId: user?.id
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to delete user');
       }
 
       // Refresh the users list
@@ -185,10 +183,10 @@ const UsersManagement: React.FC = () => {
       setShowDeleteModal(false);
       setSelectedUser(null);
       
-      alert('User deleted successfully');
+      alert(`User ${result.deletedUser.name} deleted successfully`);
     } catch (error) {
       console.error('Error deleting user:', error);
-      alert('Error deleting user. Please try again.');
+      alert(`Error deleting user: ${error.message}`);
     } finally {
       setIsDeleting(false);
     }
