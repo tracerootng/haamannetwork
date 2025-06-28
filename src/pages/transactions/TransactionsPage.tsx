@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowUpRight, ArrowDownRight, Download, Search, Filter, BarChart2, Trophy, Users, Calendar, ChevronDown, ChevronUp, Crown, Eye } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, Download, Search, Filter, BarChart2, Trophy, Users, Calendar, ChevronDown, ChevronUp, Crown, Eye, ChevronLeft, ChevronRight } from 'lucide-react';
 import Card from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
@@ -232,6 +232,11 @@ const TransactionsPage: React.FC = () => {
   const [selectedTransactionDetail, setSelectedTransactionDetail] = useState<Transaction | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [totalTransactions, setTotalTransactions] = useState(0);
+
   useEffect(() => {
     if (isAuthenticated && user) {
       fetchTransactions();
@@ -249,15 +254,34 @@ const TransactionsPage: React.FC = () => {
     }
   }, [showLeaderboard, leaderboardType]);
 
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, selectedType, selectedStatus, timeRange, selectedNetwork]);
+
   const fetchTransactions = async () => {
     if (!user) return;
 
     try {
+      // First get the total count for pagination
+      const { count, error: countError } = await supabase
+        .from('transactions')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id);
+
+      if (countError) throw countError;
+      setTotalTransactions(count || 0);
+
+      // Then fetch the transactions for the current page
+      const from = (currentPage - 1) * itemsPerPage;
+      const to = from + itemsPerPage - 1;
+
       const { data, error } = await supabase
         .from('transactions')
         .select('*')
         .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .range(from, to);
 
       if (error) throw error;
       setTransactions(data || []);
@@ -582,6 +606,15 @@ const TransactionsPage: React.FC = () => {
     return matchesSearch && matchesType && matchesStatus && matchesNetwork && matchesTimeRange;
   });
 
+  // Calculate total pages
+  const totalPages = Math.ceil(filteredTransactions.length / itemsPerPage);
+
+  // Get current page transactions
+  const currentTransactions = filteredTransactions.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
   const toggleStats = () => {
     setShowStats(!showStats);
     if (!showStats && !loadingStats) {
@@ -611,6 +644,23 @@ const TransactionsPage: React.FC = () => {
   const handleViewTransactionDetail = (transaction: Transaction) => {
     setSelectedTransactionDetail(transaction);
     setShowDetailModal(true);
+  };
+
+  // Pagination handlers
+  const handlePageChange = (newPage: number) => {
+    setCurrentPage(newPage);
+  };
+
+  const handlePrevPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
+
+  const handleNextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+    }
   };
 
   if (!isAuthenticated) {
@@ -1138,9 +1188,9 @@ const TransactionsPage: React.FC = () => {
       </Card>
       
       <Card className="p-4">
-        {filteredTransactions.length > 0 ? (
+        {currentTransactions.length > 0 ? (
           <ul className="divide-y divide-gray-200 dark:divide-gray-700">
-            {filteredTransactions.map((transaction) => (
+            {currentTransactions.map((transaction) => (
               <li key={transaction.id} className="py-4 first:pt-0 last:pb-0">
                 <div className="flex items-start sm:items-center">
                   <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${
@@ -1207,6 +1257,82 @@ const TransactionsPage: React.FC = () => {
                 : "No transactions found matching your filters."
               }
             </p>
+          </div>
+        )}
+
+        {/* Pagination */}
+        {filteredTransactions.length > 0 && (
+          <div className="flex items-center justify-between mt-6 border-t border-gray-200 dark:border-gray-700 pt-4">
+            <div className="text-sm text-gray-600 dark:text-gray-400">
+              Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, filteredTransactions.length)} of {filteredTransactions.length}
+            </div>
+            <div className="flex space-x-2">
+              <button
+                onClick={handlePrevPage}
+                disabled={currentPage === 1}
+                className="p-2 rounded-lg border border-gray-300 dark:border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <ChevronLeft size={16} />
+              </button>
+              
+              {/* Page numbers */}
+              <div className="flex space-x-1">
+                {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+                  // Show first page, current page, and last page
+                  let pageToShow: number;
+                  if (totalPages <= 5) {
+                    // If 5 or fewer pages, show all
+                    pageToShow = i + 1;
+                  } else if (currentPage <= 3) {
+                    // If on first 3 pages, show pages 1-5
+                    pageToShow = i + 1;
+                  } else if (currentPage >= totalPages - 2) {
+                    // If on last 3 pages, show last 5 pages
+                    pageToShow = totalPages - 4 + i;
+                  } else {
+                    // Otherwise show current page and neighbors
+                    pageToShow = currentPage - 2 + i;
+                  }
+                  
+                  return (
+                    <button
+                      key={pageToShow}
+                      onClick={() => handlePageChange(pageToShow)}
+                      className={`w-8 h-8 flex items-center justify-center rounded-lg ${
+                        currentPage === pageToShow
+                          ? 'bg-[#0F9D58] text-white'
+                          : 'border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300'
+                      }`}
+                    >
+                      {pageToShow}
+                    </button>
+                  );
+                })}
+                
+                {/* Show ellipsis if needed */}
+                {totalPages > 5 && currentPage < totalPages - 2 && (
+                  <span className="w-8 h-8 flex items-center justify-center">...</span>
+                )}
+                
+                {/* Always show last page if there are more than 5 pages and we're not near the end */}
+                {totalPages > 5 && currentPage < totalPages - 2 && (
+                  <button
+                    onClick={() => handlePageChange(totalPages)}
+                    className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300"
+                  >
+                    {totalPages}
+                  </button>
+                )}
+              </div>
+              
+              <button
+                onClick={handleNextPage}
+                disabled={currentPage === totalPages}
+                className="p-2 rounded-lg border border-gray-300 dark:border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
           </div>
         )}
       </Card>
