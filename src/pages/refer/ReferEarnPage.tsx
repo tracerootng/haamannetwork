@@ -25,7 +25,10 @@ const ReferEarnPage: React.FC = () => {
     referralEarnings: 0,
     bonusPercentage: 6,
     dataRewardEligible: false,
-    dataRewardClaimed: false
+    dataRewardClaimed: false,
+    rewardEnabled: true,
+    requiredReferrals: 5,
+    rewardDataSize: '1GB'
   });
   const [referralCodeError, setReferralCodeError] = useState<string | null>(null);
   const [verifyCodeInput, setVerifyCodeInput] = useState('');
@@ -69,24 +72,25 @@ const ReferEarnPage: React.FC = () => {
     if (!user) return;
     
     try {
-      // Get referral bonus percentage from admin settings
+      // Get referral settings from admin settings
       const { data: settingsData, error: settingsError } = await supabase
         .from('admin_settings')
-        .select('value')
-        .eq('key', 'referral_bonus_percentage')
-        .maybeSingle();
+        .select('key, value')
+        .in('key', [
+          'referral_bonus_percentage', 
+          'referral_reward_enabled', 
+          'referral_reward_count', 
+          'referral_reward_data_size'
+        ]);
       
       if (settingsError) {
-        console.error('Error fetching referral bonus percentage:', settingsError);
+        console.error('Error fetching referral settings:', settingsError);
       } else if (settingsData) {
-        setReferralStats(prev => ({
-          ...prev,
-          bonusPercentage: parseFloat(settingsData.value) || 6
-        }));
-      }
-      
-      // Get user's current stats from the user object in the store
-      if (user) {
+        const settings: Record<string, string> = {};
+        settingsData.forEach(setting => {
+          settings[setting.key] = setting.value;
+        });
+
         // Check if user has claimed the data reward
         const { data: rewardData, error: rewardError } = await supabase
           .from('referral_rewards')
@@ -100,13 +104,18 @@ const ReferEarnPage: React.FC = () => {
         }
         
         const totalReferrals = user.totalReferrals || 0;
+        const requiredReferrals = parseInt(settings.referral_reward_count || '5');
         
         setReferralStats(prev => ({
           ...prev,
           totalReferrals: totalReferrals,
           referralEarnings: user.referralEarnings || 0,
-          dataRewardEligible: totalReferrals >= 5,
-          dataRewardClaimed: !!rewardData
+          bonusPercentage: parseFloat(settings.referral_bonus_percentage || '6'),
+          dataRewardEligible: totalReferrals >= requiredReferrals,
+          dataRewardClaimed: !!rewardData,
+          rewardEnabled: settings.referral_reward_enabled === 'true',
+          requiredReferrals: requiredReferrals,
+          rewardDataSize: settings.referral_reward_data_size || '1GB'
         }));
       }
     } catch (error) {
@@ -182,7 +191,7 @@ const ReferEarnPage: React.FC = () => {
   const claimDataReward = async () => {
     if (!user) return;
     
-    if (!referralStats.dataRewardEligible || referralStats.dataRewardClaimed) {
+    if (!referralStats.dataRewardEligible || referralStats.dataRewardClaimed || !referralStats.rewardEnabled) {
       return;
     }
     
@@ -200,10 +209,10 @@ const ReferEarnPage: React.FC = () => {
           reference: `REF-REWARD-${Date.now()}`,
           details: {
             reward_type: 'data_bundle',
-            data_size: '1GB',
+            data_size: referralStats.rewardDataSize,
             network: 'MTN',
             phone: user.phone || '',
-            note: 'Reward for referring 5 users'
+            note: `Reward for referring ${referralStats.requiredReferrals} users`
           }
         }]);
         
@@ -216,7 +225,7 @@ const ReferEarnPage: React.FC = () => {
           user_id: user.id,
           reward_type: 'data_bundle',
           reward_details: {
-            data_size: '1GB',
+            data_size: referralStats.rewardDataSize,
             network: 'MTN'
           },
           status: 'claimed'
@@ -231,7 +240,7 @@ const ReferEarnPage: React.FC = () => {
       }));
       
       // Show success message
-      alert('Congratulations! Your 1GB data reward has been claimed successfully. It will be credited to your registered phone number within 24 hours.');
+      alert(`Congratulations! Your ${referralStats.rewardDataSize} data reward has been claimed successfully. It will be credited to your registered phone number within 24 hours.`);
       
     } catch (error) {
       console.error('Error claiming data reward:', error);
@@ -301,74 +310,80 @@ const ReferEarnPage: React.FC = () => {
             <div className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">Total Earned</div>
           </div>
         </div>
-        
+
         {/* Data Reward Card */}
-        <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 border border-gray-200 dark:border-gray-700">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center">
-              <Wifi className="text-[#0F9D58] mr-2" size={20} />
-              Data Reward
-            </h3>
-            <div className={`px-2 py-1 rounded-full text-xs font-bold ${
-              referralStats.dataRewardClaimed 
-                ? 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400' 
-                : referralStats.dataRewardEligible 
-                ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400'
-                : 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-400'
-            }`}>
+        {referralStats.rewardEnabled && (
+          <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 border border-gray-200 dark:border-gray-700">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center">
+                <Wifi className="text-[#0F9D58] mr-2" size={20} />
+                Data Reward
+              </h3>
+              <div className={`px-2 py-1 rounded-full text-xs font-bold ${
+                referralStats.dataRewardClaimed 
+                  ? 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400' 
+                  : referralStats.dataRewardEligible 
+                  ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400'
+                  : 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-400'
+              }`}>
+                {referralStats.dataRewardClaimed 
+                  ? 'Claimed' 
+                  : referralStats.dataRewardEligible 
+                  ? 'Ready to Claim' 
+                  : 'In Progress'}
+              </div>
+            </div>
+            
+            <div className="bg-gray-50 dark:bg-gray-700 rounded-xl p-4 mb-3">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Refer {referralStats.requiredReferrals} friends
+                </span>
+                <span className="text-sm font-bold text-[#0F9D58]">
+                  {referralStats.totalReferrals}/{referralStats.requiredReferrals} completed
+                </span>
+              </div>
+              
+              <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2.5 mb-3">
+                <div 
+                  className="h-2.5 rounded-full bg-[#0F9D58]"
+                  style={{ width: `${Math.min(100, (referralStats.totalReferrals / referralStats.requiredReferrals) * 100)}%` }}
+                ></div>
+              </div>
+              
+              <div className="flex items-center">
+                <div className="w-8 h-8 bg-[#0F9D58]/10 rounded-full flex items-center justify-center mr-3">
+                  <Gift size={16} className="text-[#0F9D58]" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">
+                    {referralStats.rewardDataSize} Data Bundle Reward
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Refer {referralStats.requiredReferrals} friends and get {referralStats.rewardDataSize} data bundle for free
+                  </p>
+                </div>
+              </div>
+            </div>
+            
+            <Button
+              onClick={claimDataReward}
+              disabled={!referralStats.dataRewardEligible || referralStats.dataRewardClaimed || claimingReward}
+              className={`w-full ${
+                referralStats.dataRewardEligible && !referralStats.dataRewardClaimed
+                  ? 'bg-[#0F9D58] hover:bg-[#0d8a4f] text-white'
+                  : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+              }`}
+              isLoading={claimingReward}
+            >
               {referralStats.dataRewardClaimed 
-                ? 'Claimed' 
+                ? 'Reward Claimed' 
                 : referralStats.dataRewardEligible 
-                ? 'Ready to Claim' 
-                : 'In Progress'}
-            </div>
+                ? `Claim ${referralStats.rewardDataSize} Data Reward` 
+                : `Refer ${referralStats.requiredReferrals - referralStats.totalReferrals} more friend${referralStats.requiredReferrals - referralStats.totalReferrals !== 1 ? 's' : ''}`}
+            </Button>
           </div>
-          
-          <div className="bg-gray-50 dark:bg-gray-700 rounded-xl p-4 mb-3">
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Refer 5 friends</span>
-              <span className="text-sm font-bold text-[#0F9D58]">
-                {referralStats.totalReferrals}/5 completed
-              </span>
-            </div>
-            
-            <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2.5 mb-3">
-              <div 
-                className="h-2.5 rounded-full bg-[#0F9D58]"
-                style={{ width: `${Math.min(100, (referralStats.totalReferrals / 5) * 100)}%` }}
-              ></div>
-            </div>
-            
-            <div className="flex items-center">
-              <div className="w-8 h-8 bg-[#0F9D58]/10 rounded-full flex items-center justify-center mr-3">
-                <Gift size={16} className="text-[#0F9D58]" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-gray-900 dark:text-white">1GB Data Bundle Reward</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Refer 5 friends and get 1GB data bundle for free
-                </p>
-              </div>
-            </div>
-          </div>
-          
-          <Button
-            onClick={claimDataReward}
-            disabled={!referralStats.dataRewardEligible || referralStats.dataRewardClaimed || claimingReward}
-            className={`w-full ${
-              referralStats.dataRewardEligible && !referralStats.dataRewardClaimed
-                ? 'bg-[#0F9D58] hover:bg-[#0d8a4f] text-white'
-                : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
-            }`}
-            isLoading={claimingReward}
-          >
-            {referralStats.dataRewardClaimed 
-              ? 'Reward Claimed' 
-              : referralStats.dataRewardEligible 
-              ? 'Claim 1GB Data Reward' 
-              : `Refer ${5 - referralStats.totalReferrals} more friend${5 - referralStats.totalReferrals !== 1 ? 's' : ''}`}
-          </Button>
-        </div>
+        )}
 
         {/* How it Works */}
         <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 sm:p-6 border border-gray-200 dark:border-gray-700">
@@ -414,17 +429,19 @@ const ReferEarnPage: React.FC = () => {
               </div>
             </div>
             
-            <div className="flex items-start space-x-3">
-              <div className="w-8 h-8 bg-[#0F9D58] text-white rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0">
-                4
+            {referralStats.rewardEnabled && (
+              <div className="flex items-start space-x-3">
+                <div className="w-8 h-8 bg-[#0F9D58] text-white rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0">
+                  4
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h4 className="font-semibold text-gray-900 dark:text-white text-sm">Earn special data rewards</h4>
+                  <p className="text-xs text-gray-600 dark:text-gray-400">
+                    Refer {referralStats.requiredReferrals} friends and get a free {referralStats.rewardDataSize} data bundle
+                  </p>
+                </div>
               </div>
-              <div className="flex-1 min-w-0">
-                <h4 className="font-semibold text-gray-900 dark:text-white text-sm">Earn special data rewards</h4>
-                <p className="text-xs text-gray-600 dark:text-gray-400">
-                  Refer 5 friends and get a free 1GB data bundle
-                </p>
-              </div>
-            </div>
+            )}
           </div>
         </div>
 
@@ -595,7 +612,9 @@ const ReferEarnPage: React.FC = () => {
             <li>• Bonus is credited within 24 hours of successful deposit</li>
             <li>• Referred user must complete account verification</li>
             <li>• Self-referrals and fake accounts are strictly prohibited</li>
-            <li>• Data reward (1GB) is given after referring 5 users</li>
+            {referralStats.rewardEnabled && (
+              <li>• Data reward ({referralStats.rewardDataSize}) is given after referring {referralStats.requiredReferrals} users</li>
+            )}
             <li>• Haaman Network reserves the right to modify terms at any time</li>
           </ul>
         </div>

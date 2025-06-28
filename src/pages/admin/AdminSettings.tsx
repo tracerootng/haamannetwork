@@ -22,7 +22,11 @@ import {
   Eye,
   EyeOff,
   CreditCard,
-  Lock
+  Lock,
+  Users,
+  Gift,
+  ToggleLeft,
+  ToggleRight
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../store/authStore';
@@ -150,6 +154,12 @@ const AdminSettings: React.FC = () => {
     switch (key) {
       case 'referral_bonus_percentage':
         return <Percent className="text-green-500" size={20} />;
+      case 'referral_reward_enabled':
+        return <ToggleRight className="text-green-500" size={20} />;
+      case 'referral_reward_count':
+        return <Users className="text-green-500" size={20} />;
+      case 'referral_reward_data_size':
+        return <Gift className="text-green-500" size={20} />;
       case 'site_name':
         return <Globe className="text-blue-500" size={20} />;
       case 'support_email':
@@ -199,10 +209,69 @@ const AdminSettings: React.FC = () => {
     'Homepage Banners': ['hero_banner_image', 'hero_banner_image_alt', 'steps_banner_image'],
     'Homepage Content': ['hero_title', 'hero_subtitle', 'steps_title'],
     'Download App': ['download_app_enabled', 'download_app_url'],
-    'Referral System': ['referral_bonus_percentage'],
+    'Referral System': ['referral_bonus_percentage', 'referral_reward_enabled', 'referral_reward_count', 'referral_reward_data_size'],
     'Transaction Limits': ['min_transaction_amount', 'max_transaction_amount', 'max_wallet_balance'],
     'System': ['maintenance_mode'],
   };
+
+  // Check if we need to add new settings
+  const ensureRequiredSettings = async () => {
+    const requiredSettings = [
+      {
+        key: 'referral_reward_enabled',
+        value: 'true',
+        description: 'Enable or disable the data reward for referrals'
+      },
+      {
+        key: 'referral_reward_count',
+        value: '5',
+        description: 'Number of referrals required to earn the data reward'
+      },
+      {
+        key: 'referral_reward_data_size',
+        value: '1GB',
+        description: 'Size of the data reward (e.g., 1GB, 2GB)'
+      }
+    ];
+
+    for (const setting of requiredSettings) {
+      const { data, error } = await supabase
+        .from('admin_settings')
+        .select('id')
+        .eq('key', setting.key)
+        .maybeSingle();
+
+      if (error) {
+        console.error(`Error checking for setting ${setting.key}:`, error);
+        continue;
+      }
+
+      if (!data) {
+        // Setting doesn't exist, create it
+        const { error: insertError } = await supabase
+          .from('admin_settings')
+          .insert([{
+            key: setting.key,
+            value: setting.value,
+            description: setting.description,
+            updated_by: user?.id
+          }]);
+
+        if (insertError) {
+          console.error(`Error creating setting ${setting.key}:`, insertError);
+        }
+      }
+    }
+
+    // Refresh settings after ensuring they exist
+    fetchSettings();
+  };
+
+  useEffect(() => {
+    if (user?.isAdmin) {
+      ensureRequiredSettings();
+    }
+  }, [user?.isAdmin]);
 
   if (loading) {
     return (
@@ -275,6 +344,11 @@ const AdminSettings: React.FC = () => {
                     Manage contact information and company details displayed in the website footer
                   </p>
                 )}
+                {category === 'Referral System' && (
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                    Configure referral bonus percentages and data rewards for user referrals
+                  </p>
+                )}
               </div>
               
               <div className="p-6 space-y-6">
@@ -296,7 +370,9 @@ const AdminSettings: React.FC = () => {
                           {setting.description}
                         </p>
                         
-                        {setting.key === 'maintenance_mode' || setting.key === 'download_app_enabled' ? (
+                        {setting.key === 'maintenance_mode' || 
+                          setting.key === 'download_app_enabled' || 
+                          setting.key === 'referral_reward_enabled' ? (
                           <select
                             value={formData[key] || setting.value}
                             onChange={(e) => handleChange(key, e.target.value)}
@@ -375,7 +451,7 @@ const AdminSettings: React.FC = () => {
                             placeholder="Enter URL"
                             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0F9D58]"
                           />
-                        ) : setting.key.includes('percentage') || setting.key.includes('amount') || setting.key.includes('balance') ? (
+                        ) : setting.key.includes('percentage') || setting.key.includes('amount') || setting.key.includes('balance') || setting.key === 'referral_reward_count' ? (
                           <input
                             type="number"
                             value={formData[key] || setting.value}
@@ -428,6 +504,24 @@ const AdminSettings: React.FC = () => {
                         {setting.key === 'flutterwave_encryption_key' && (
                           <p className="text-xs text-red-500 dark:text-red-400 mt-1">
                             ⚠️ Keep this encryption key secure. It's used to encrypt sensitive payment data.
+                          </p>
+                        )}
+
+                        {setting.key === 'referral_reward_enabled' && (
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            Enable or disable the data reward for users who refer others
+                          </p>
+                        )}
+
+                        {setting.key === 'referral_reward_count' && (
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            Number of referrals required to earn the data reward
+                          </p>
+                        )}
+
+                        {setting.key === 'referral_reward_data_size' && (
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            Size of the data reward (e.g., 1GB, 2GB, 5GB)
                           </p>
                         )}
                       </div>
