@@ -12,7 +12,9 @@ import {
   TrendingUp,
   TrendingDown,
   DollarSign,
-  FileText
+  FileText,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../store/authStore';
@@ -44,6 +46,12 @@ const TransactionsManagement: React.FC = () => {
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [showTransactionModal, setShowTransactionModal] = useState(false);
   const [exportLoading, setExportLoading] = useState(false);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const itemsPerPage = 10;
 
   useEffect(() => {
     if (!user?.isAdmin) {
@@ -51,11 +59,39 @@ const TransactionsManagement: React.FC = () => {
       return;
     }
     fetchTransactions();
-  }, [user, navigate]);
+  }, [user, navigate, currentPage, statusFilter, typeFilter]);
 
   const fetchTransactions = async () => {
     try {
-      const { data, error } = await supabase
+      setLoading(true);
+      
+      // First get the total count for pagination
+      let countQuery = supabase
+        .from('transactions')
+        .select('id', { count: 'exact', head: true });
+      
+      // Apply filters to count query
+      if (statusFilter !== 'all') {
+        countQuery = countQuery.eq('status', statusFilter);
+      }
+      
+      if (typeFilter !== 'all') {
+        countQuery = countQuery.eq('type', typeFilter);
+      }
+      
+      const { count, error: countError } = await countQuery;
+      
+      if (countError) throw countError;
+      
+      setTotalCount(count || 0);
+      setTotalPages(Math.ceil((count || 0) / itemsPerPage));
+      
+      // Calculate range for pagination
+      const from = (currentPage - 1) * itemsPerPage;
+      const to = from + itemsPerPage - 1;
+      
+      // Now fetch the actual data with pagination
+      let query = supabase
         .from('transactions')
         .select(`
           *,
@@ -64,7 +100,19 @@ const TransactionsManagement: React.FC = () => {
             email
           )
         `)
+        .range(from, to)
         .order('created_at', { ascending: false });
+      
+      // Apply filters
+      if (statusFilter !== 'all') {
+        query = query.eq('status', statusFilter);
+      }
+      
+      if (typeFilter !== 'all') {
+        query = query.eq('type', typeFilter);
+      }
+      
+      const { data, error } = await query;
 
       if (error) throw error;
 
@@ -171,7 +219,7 @@ const TransactionsManagement: React.FC = () => {
     return matchesSearch && matchesType && matchesStatus;
   });
 
-  const totalTransactions = transactions.length;
+  const totalTransactions = totalCount;
   const successfulTransactions = transactions.filter(t => t.status === 'success').length;
   const pendingTransactions = transactions.filter(t => t.status === 'pending').length;
   const totalRevenue = transactions
@@ -214,7 +262,7 @@ const TransactionsManagement: React.FC = () => {
       doc.text('Summary:', 14, 35);
       
       doc.setFontSize(10);
-      doc.text(`Total Transactions: ${filteredTransactions.length}`, 14, 42);
+      doc.text(`Total Transactions: ${totalCount}`, 14, 42);
       doc.text(`Total Revenue: ${formatCurrency(totalRevenue)}`, 14, 48);
       doc.text(`Successful: ${successfulTransactions}`, 14, 54);
       doc.text(`Pending: ${pendingTransactions}`, 14, 60);
@@ -298,6 +346,73 @@ const TransactionsManagement: React.FC = () => {
     } finally {
       setExportLoading(false);
     }
+  };
+
+  // Pagination handlers
+  const handleNextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+    }
+  };
+
+  const handlePrevPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
+
+  const handlePageClick = (page: number) => {
+    setCurrentPage(page);
+  };
+
+  // Generate page numbers for pagination
+  const getPageNumbers = () => {
+    const pageNumbers = [];
+    const maxPagesToShow = 5;
+    
+    if (totalPages <= maxPagesToShow) {
+      // Show all pages if there are few
+      for (let i = 1; i <= totalPages; i++) {
+        pageNumbers.push(i);
+      }
+    } else {
+      // Always show first page
+      pageNumbers.push(1);
+      
+      // Calculate start and end of middle pages
+      let startPage = Math.max(2, currentPage - 1);
+      let endPage = Math.min(totalPages - 1, currentPage + 1);
+      
+      // Adjust if we're near the beginning
+      if (currentPage <= 3) {
+        endPage = Math.min(totalPages - 1, 4);
+      }
+      
+      // Adjust if we're near the end
+      if (currentPage >= totalPages - 2) {
+        startPage = Math.max(2, totalPages - 3);
+      }
+      
+      // Add ellipsis after first page if needed
+      if (startPage > 2) {
+        pageNumbers.push('...');
+      }
+      
+      // Add middle pages
+      for (let i = startPage; i <= endPage; i++) {
+        pageNumbers.push(i);
+      }
+      
+      // Add ellipsis before last page if needed
+      if (endPage < totalPages - 1) {
+        pageNumbers.push('...');
+      }
+      
+      // Always show last page
+      pageNumbers.push(totalPages);
+    }
+    
+    return pageNumbers;
   };
 
   if (loading) {
@@ -409,7 +524,10 @@ const TransactionsManagement: React.FC = () => {
             
             <select
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
+              onChange={(e) => {
+                setStatusFilter(e.target.value);
+                setCurrentPage(1); // Reset to first page when filter changes
+              }}
               className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0F9D58]"
             >
               {statusOptions.map(option => (
@@ -421,7 +539,10 @@ const TransactionsManagement: React.FC = () => {
             
             <select
               value={typeFilter}
-              onChange={(e) => setTypeFilter(e.target.value)}
+              onChange={(e) => {
+                setTypeFilter(e.target.value);
+                setCurrentPage(1); // Reset to first page when filter changes
+              }}
               className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0F9D58]"
             >
               {transactionTypes.map(type => (
@@ -578,6 +699,47 @@ const TransactionsManagement: React.FC = () => {
             </table>
           </div>
         </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex justify-between items-center mt-6">
+            <div className="text-sm text-gray-600 dark:text-gray-400">
+              Showing {Math.min((currentPage - 1) * itemsPerPage + 1, totalCount)} to {Math.min(currentPage * itemsPerPage, totalCount)} of {totalCount} transactions
+            </div>
+            <div className="flex space-x-2">
+              <button
+                onClick={handlePrevPage}
+                disabled={currentPage === 1}
+                className="px-3 py-1 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <ChevronLeft size={16} />
+              </button>
+              
+              {getPageNumbers().map((page, index) => (
+                <button
+                  key={index}
+                  onClick={() => typeof page === 'number' ? handlePageClick(page) : null}
+                  disabled={page === '...'}
+                  className={`px-3 py-1 rounded-md ${
+                    page === currentPage
+                      ? 'bg-[#0F9D58] text-white'
+                      : 'border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300'
+                  } ${page === '...' ? 'cursor-default' : ''}`}
+                >
+                  {page}
+                </button>
+              ))}
+              
+              <button
+                onClick={handleNextPage}
+                disabled={currentPage === totalPages}
+                className="px-3 py-1 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+        )}
 
         {filteredTransactions.length === 0 && (
           <div className="text-center py-12">

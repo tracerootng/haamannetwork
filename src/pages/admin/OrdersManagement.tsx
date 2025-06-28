@@ -1,13 +1,31 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Search, Filter, Package, Eye, Edit, Truck, CheckCircle, Clock, XCircle, Calendar, User, MapPin, Phone, Mail, AlertTriangle, Ban, Plus, Baseline as Timeline } from 'lucide-react';
+import { 
+  ArrowLeft, 
+  Package, 
+  Truck, 
+  CheckCircle, 
+  Clock, 
+  XCircle,
+  Eye,
+  MapPin,
+  RefreshCw,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  FileText
+} from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../store/authStore';
+import Card from '../../components/ui/Card';
+import Badge from '../../components/ui/Badge';
+import Button from '../../components/ui/Button';
 import { formatCurrency, formatDate } from '../../lib/utils';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
 
 type Order = {
   id: string;
-  user_id: string;
   products: Array<{
     product_id: string;
     name: string;
@@ -50,6 +68,7 @@ const OrdersManagement: React.FC = () => {
   const { user } = useAuthStore();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [paymentFilter, setPaymentFilter] = useState('all');
@@ -69,6 +88,13 @@ const OrdersManagement: React.FC = () => {
     description: '',
     event_date: '',
   });
+  const [exportLoading, setExportLoading] = useState(false);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const itemsPerPage = 10;
 
   useEffect(() => {
     if (!user?.isAdmin) {
@@ -76,11 +102,43 @@ const OrdersManagement: React.FC = () => {
       return;
     }
     fetchOrders();
-  }, [user, navigate]);
+  }, [user, navigate, currentPage, statusFilter, paymentFilter]);
 
-  const fetchOrders = async () => {
+  const fetchOrders = async (showRefreshIndicator = false) => {
+    if (showRefreshIndicator) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+    }
+
     try {
-      const { data, error } = await supabase
+      // First get the total count for pagination
+      let countQuery = supabase
+        .from('orders')
+        .select('id', { count: 'exact', head: true });
+      
+      // Apply filters to count query
+      if (statusFilter !== 'all') {
+        countQuery = countQuery.eq('status', statusFilter);
+      }
+      
+      if (paymentFilter !== 'all') {
+        countQuery = countQuery.eq('payment_method', paymentFilter);
+      }
+      
+      const { count, error: countError } = await countQuery;
+      
+      if (countError) throw countError;
+      
+      setTotalCount(count || 0);
+      setTotalPages(Math.ceil((count || 0) / itemsPerPage));
+      
+      // Calculate range for pagination
+      const from = (currentPage - 1) * itemsPerPage;
+      const to = from + itemsPerPage - 1;
+      
+      // Now fetch the actual data with pagination
+      let query = supabase
         .from('orders')
         .select(`
           *,
@@ -90,7 +148,19 @@ const OrdersManagement: React.FC = () => {
             phone
           )
         `)
+        .range(from, to)
         .order('created_at', { ascending: false });
+      
+      // Apply filters
+      if (statusFilter !== 'all') {
+        query = query.eq('status', statusFilter);
+      }
+      
+      if (paymentFilter !== 'all') {
+        query = query.eq('payment_method', paymentFilter);
+      }
+      
+      const { data, error } = await query;
 
       if (error) throw error;
 
@@ -106,6 +176,7 @@ const OrdersManagement: React.FC = () => {
       console.error('Error fetching orders:', error);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
@@ -122,6 +193,10 @@ const OrdersManagement: React.FC = () => {
     } catch (error) {
       console.error('Error fetching tracking events:', error);
     }
+  };
+
+  const handleRefresh = () => {
+    fetchOrders(true);
   };
 
   const handleUpdateOrder = async () => {
@@ -343,13 +418,10 @@ const OrdersManagement: React.FC = () => {
       order.user_email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       order.shipping_address.phone.toLowerCase().includes(searchQuery.toLowerCase());
     
-    const matchesStatus = statusFilter === 'all' || order.status === statusFilter;
-    const matchesPayment = paymentFilter === 'all' || order.payment_method === paymentFilter;
-    
-    return matchesSearch && matchesStatus && matchesPayment;
+    return matchesSearch;
   });
 
-  const totalOrders = orders.length;
+  const totalOrders = totalCount;
   const pendingOrders = orders.filter(o => o.status === 'pending').length;
   const processingOrders = orders.filter(o => o.status === 'processing').length;
   const shippedOrders = orders.filter(o => o.status === 'shipped').length;
@@ -362,6 +434,191 @@ const OrdersManagement: React.FC = () => {
     { value: 'delivered', label: 'Order Delivered' },
     { value: 'cancelled', label: 'Order Cancelled' },
   ];
+
+  // Export to PDF function
+  const handleExportPdf = async () => {
+    setExportLoading(true);
+    try {
+      const doc = new jsPDF();
+      
+      // Add title
+      doc.setFontSize(18);
+      doc.setTextColor(15, 157, 88); // Primary color #0F9D58
+      doc.text('Haaman Network - Orders Report', 105, 15, { align: 'center' });
+      
+      // Add filters info
+      doc.setFontSize(10);
+      doc.setTextColor(100);
+      let filterText = `Status: ${statusFilter === 'all' ? 'All' : statusFilter}, Payment: ${paymentFilter === 'all' ? 'All' : paymentFilter}`;
+      if (searchQuery) filterText += `, Search: "${searchQuery}"`;
+      doc.text(filterText, 105, 22, { align: 'center' });
+      
+      // Add date
+      doc.text(`Generated: ${new Date().toLocaleString()}`, 105, 27, { align: 'center' });
+      
+      // Add summary
+      doc.setFontSize(12);
+      doc.setTextColor(0);
+      doc.text('Summary:', 14, 35);
+      
+      doc.setFontSize(10);
+      doc.text(`Total Orders: ${totalOrders}`, 14, 42);
+      doc.text(`Pending: ${pendingOrders}`, 14, 48);
+      doc.text(`Processing: ${processingOrders}`, 14, 54);
+      doc.text(`Shipped: ${shippedOrders}`, 14, 60);
+      doc.text(`Pay on Delivery: ${payOnDeliveryOrders}`, 14, 66);
+      
+      // Add table
+      const tableColumn = ["Tracking #", "Customer", "Products", "Amount", "Status", "Payment", "Date"];
+      const tableRows = filteredOrders.map(order => [
+        order.tracking_number,
+        order.user_name || 'Unknown',
+        `${order.products.length} item(s)`,
+        formatCurrency(order.total_amount),
+        order.status.toUpperCase(),
+        order.payment_method === 'wallet' ? 'Wallet' : 'Pay on Delivery',
+        formatDate(order.created_at)
+      ]);
+      
+      // @ts-ignore - jspdf-autotable types are not included
+      doc.autoTable({
+        head: [tableColumn],
+        body: tableRows,
+        startY: 75,
+        styles: { fontSize: 8, cellPadding: 3 },
+        headStyles: { fillColor: [15, 157, 88], textColor: [255, 255, 255] },
+        alternateRowStyles: { fillColor: [240, 240, 240] },
+        columnStyles: {
+          0: { cellWidth: 30 }, // Tracking #
+          1: { cellWidth: 35 }, // Customer
+          2: { cellWidth: 20 }, // Products
+          3: { cellWidth: 25, halign: 'right' }, // Amount
+          4: { cellWidth: 20, halign: 'center' }, // Status
+          5: { cellWidth: 25 }, // Payment
+          6: { cellWidth: 25 } // Date
+        },
+      });
+      
+      // Save the PDF
+      doc.save(`haaman-orders-${new Date().toISOString().split('T')[0]}.pdf`);
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      alert('Failed to generate PDF. Please try again.');
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
+  // Export to CSV function
+  const handleExportCsv = () => {
+    setExportLoading(true);
+    try {
+      // Create CSV content
+      const headers = ['Tracking Number', 'Customer', 'Email', 'Phone', 'Products', 'Total Amount', 'Status', 'Payment Method', 'Created Date', 'Updated Date'];
+      
+      const rows = filteredOrders.map(order => [
+        order.tracking_number,
+        order.user_name || 'Unknown',
+        order.user_email || 'Unknown',
+        order.user_phone || order.shipping_address.phone,
+        order.products.length.toString(),
+        order.total_amount.toString(),
+        order.status,
+        order.payment_method,
+        order.created_at,
+        order.updated_at
+      ]);
+      
+      // Combine headers and rows
+      const csvContent = [
+        headers.join(','),
+        ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+      ].join('\n');
+      
+      // Create a blob and download link
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `haaman-orders-${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error) {
+      console.error('Error generating CSV:', error);
+      alert('Failed to generate CSV. Please try again.');
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
+  // Pagination handlers
+  const handleNextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+    }
+  };
+
+  const handlePrevPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
+
+  const handlePageClick = (page: number) => {
+    setCurrentPage(page);
+  };
+
+  // Generate page numbers for pagination
+  const getPageNumbers = () => {
+    const pageNumbers = [];
+    const maxPagesToShow = 5;
+    
+    if (totalPages <= maxPagesToShow) {
+      // Show all pages if there are few
+      for (let i = 1; i <= totalPages; i++) {
+        pageNumbers.push(i);
+      }
+    } else {
+      // Always show first page
+      pageNumbers.push(1);
+      
+      // Calculate start and end of middle pages
+      let startPage = Math.max(2, currentPage - 1);
+      let endPage = Math.min(totalPages - 1, currentPage + 1);
+      
+      // Adjust if we're near the beginning
+      if (currentPage <= 3) {
+        endPage = Math.min(totalPages - 1, 4);
+      }
+      
+      // Adjust if we're near the end
+      if (currentPage >= totalPages - 2) {
+        startPage = Math.max(2, totalPages - 3);
+      }
+      
+      // Add ellipsis after first page if needed
+      if (startPage > 2) {
+        pageNumbers.push('...');
+      }
+      
+      // Add middle pages
+      for (let i = startPage; i <= endPage; i++) {
+        pageNumbers.push(i);
+      }
+      
+      // Add ellipsis before last page if needed
+      if (endPage < totalPages - 1) {
+        pageNumbers.push('...');
+      }
+      
+      // Always show last page
+      pageNumbers.push(totalPages);
+    }
+    
+    return pageNumbers;
+  };
 
   if (loading) {
     return (
@@ -388,6 +645,33 @@ const OrdersManagement: React.FC = () => {
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Orders Management</h1>
                 <p className="text-sm text-gray-500 dark:text-gray-400">{totalOrders} total orders</p>
               </div>
+            </div>
+            
+            <div className="flex space-x-3">
+              <button
+                onClick={handleExportPdf}
+                disabled={exportLoading || filteredOrders.length === 0}
+                className="flex items-center px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50"
+              >
+                <FileText size={16} className="mr-2" />
+                Export PDF
+              </button>
+              <button
+                onClick={handleExportCsv}
+                disabled={exportLoading || filteredOrders.length === 0}
+                className="flex items-center px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50"
+              >
+                <Download size={16} className="mr-2" />
+                Export CSV
+              </button>
+              <button
+                onClick={handleRefresh}
+                disabled={refreshing}
+                className="flex items-center px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+              >
+                <RefreshCw size={16} className={`mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+                Refresh
+              </button>
             </div>
           </div>
         </div>
@@ -463,7 +747,10 @@ const OrdersManagement: React.FC = () => {
             
             <select
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
+              onChange={(e) => {
+                setStatusFilter(e.target.value);
+                setCurrentPage(1); // Reset to first page when filter changes
+              }}
               className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0F9D58]"
             >
               <option value="all">All Status</option>
@@ -476,7 +763,10 @@ const OrdersManagement: React.FC = () => {
 
             <select
               value={paymentFilter}
-              onChange={(e) => setPaymentFilter(e.target.value)}
+              onChange={(e) => {
+                setPaymentFilter(e.target.value);
+                setCurrentPage(1); // Reset to first page when filter changes
+              }}
               className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0F9D58]"
             >
               <option value="all">All Payment Methods</option>
@@ -613,6 +903,47 @@ const OrdersManagement: React.FC = () => {
             </table>
           </div>
         </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex justify-between items-center mt-6">
+            <div className="text-sm text-gray-600 dark:text-gray-400">
+              Showing {Math.min((currentPage - 1) * itemsPerPage + 1, totalCount)} to {Math.min(currentPage * itemsPerPage, totalCount)} of {totalCount} orders
+            </div>
+            <div className="flex space-x-2">
+              <button
+                onClick={handlePrevPage}
+                disabled={currentPage === 1}
+                className="px-3 py-1 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <ChevronLeft size={16} />
+              </button>
+              
+              {getPageNumbers().map((page, index) => (
+                <button
+                  key={index}
+                  onClick={() => typeof page === 'number' ? handlePageClick(page) : null}
+                  disabled={page === '...'}
+                  className={`px-3 py-1 rounded-md ${
+                    page === currentPage
+                      ? 'bg-[#0F9D58] text-white'
+                      : 'border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300'
+                  } ${page === '...' ? 'cursor-default' : ''}`}
+                >
+                  {page}
+                </button>
+              ))}
+              
+              <button
+                onClick={handleNextPage}
+                disabled={currentPage === totalPages}
+                className="px-3 py-1 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+        )}
 
         {filteredOrders.length === 0 && (
           <div className="text-center py-12">

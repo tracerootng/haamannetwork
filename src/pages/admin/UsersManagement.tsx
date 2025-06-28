@@ -3,21 +3,27 @@ import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, 
   Search, 
-  Filter,
-  Users,
-  Eye,
-  Ban,
-  CheckCircle,
-  XCircle,
-  Calendar,
-  Wallet,
+  Filter, 
+  Users, 
+  Eye, 
+  Ban, 
+  CheckCircle, 
+  XCircle, 
+  Calendar, 
+  Wallet, 
   TrendingUp,
   Trash2,
-  AlertTriangle
+  AlertTriangle,
+  Download,
+  FileText,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../store/authStore';
 import { formatCurrency, formatDate } from '../../lib/utils';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
 
 type User = {
   id: string;
@@ -46,6 +52,13 @@ const UsersManagement: React.FC = () => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [showBanModal, setShowBanModal] = useState(false);
   const [isBanning, setIsBanning] = useState(false);
+  const [exportLoading, setExportLoading] = useState(false);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const itemsPerPage = 10;
 
   useEffect(() => {
     if (!user?.isAdmin) {
@@ -53,14 +66,31 @@ const UsersManagement: React.FC = () => {
       return;
     }
     fetchUsers();
-  }, [user, navigate]);
+  }, [user, navigate, currentPage]);
 
   const fetchUsers = async () => {
     try {
-      // First get all users with their basic info
+      setLoading(true);
+      
+      // First get the total count for pagination
+      const { count, error: countError } = await supabase
+        .from('profiles')
+        .select('*', { count: 'exact', head: true });
+      
+      if (countError) throw countError;
+      
+      setTotalCount(count || 0);
+      setTotalPages(Math.ceil((count || 0) / itemsPerPage));
+      
+      // Calculate range for pagination
+      const from = (currentPage - 1) * itemsPerPage;
+      const to = from + itemsPerPage - 1;
+      
+      // Get users with pagination
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
+        .range(from, to)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -198,6 +228,186 @@ const UsersManagement: React.FC = () => {
     }
   };
 
+  // Export to PDF function
+  const handleExportPdf = async () => {
+    setExportLoading(true);
+    try {
+      const doc = new jsPDF();
+      
+      // Add title
+      doc.setFontSize(18);
+      doc.setTextColor(15, 157, 88); // Primary color #0F9D58
+      doc.text('Haaman Network - User Report', 105, 15, { align: 'center' });
+      
+      // Add filters info
+      doc.setFontSize(10);
+      doc.setTextColor(100);
+      let filterText = `Search: "${searchQuery || 'None'}"`;
+      doc.text(filterText, 105, 22, { align: 'center' });
+      
+      // Add date
+      doc.text(`Generated: ${new Date().toLocaleString()}`, 105, 27, { align: 'center' });
+      
+      // Add summary
+      doc.setFontSize(12);
+      doc.setTextColor(0);
+      doc.text('Summary:', 14, 35);
+      
+      doc.setFontSize(10);
+      doc.text(`Total Users: ${totalCount}`, 14, 42);
+      doc.text(`Admin Users: ${users.filter(u => u.is_admin).length}`, 14, 48);
+      
+      const totalWalletBalance = users.reduce((sum, u) => sum + Number(u.wallet_balance), 0);
+      doc.text(`Total Wallet Balance: ${formatCurrency(totalWalletBalance)}`, 14, 54);
+      
+      // Add table
+      const tableColumn = ["Name", "Email", "Phone", "Wallet Balance", "Referrals", "Joined"];
+      const tableRows = filteredUsers.map(user => [
+        user.name,
+        user.email,
+        user.phone || 'N/A',
+        formatCurrency(user.wallet_balance),
+        user.total_referrals.toString(),
+        formatDate(user.created_at)
+      ]);
+      
+      // @ts-ignore - jspdf-autotable types are not included
+      doc.autoTable({
+        head: [tableColumn],
+        body: tableRows,
+        startY: 60,
+        styles: { fontSize: 8, cellPadding: 3 },
+        headStyles: { fillColor: [15, 157, 88], textColor: [255, 255, 255] },
+        alternateRowStyles: { fillColor: [240, 240, 240] },
+        columnStyles: {
+          0: { cellWidth: 40 }, // Name
+          1: { cellWidth: 50 }, // Email
+          2: { cellWidth: 30 }, // Phone
+          3: { cellWidth: 30, halign: 'right' }, // Wallet Balance
+          4: { cellWidth: 20, halign: 'center' }, // Referrals
+          5: { cellWidth: 30 } // Joined
+        },
+      });
+      
+      // Save the PDF
+      doc.save(`haaman-users-${new Date().toISOString().split('T')[0]}.pdf`);
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      alert('Failed to generate PDF. Please try again.');
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
+  // Export to CSV function
+  const handleExportCsv = () => {
+    setExportLoading(true);
+    try {
+      // Create CSV content
+      const headers = ['Name', 'Email', 'Phone', 'Wallet Balance', 'Referrals', 'Referral Earnings', 'Joined', 'Referred By'];
+      
+      const rows = filteredUsers.map(user => [
+        user.name,
+        user.email,
+        user.phone || '',
+        user.wallet_balance.toString(),
+        user.total_referrals.toString(),
+        user.referral_earnings.toString(),
+        user.created_at,
+        user.referrer_name || ''
+      ]);
+      
+      // Combine headers and rows
+      const csvContent = [
+        headers.join(','),
+        ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+      ].join('\n');
+      
+      // Create a blob and download link
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `haaman-users-${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error) {
+      console.error('Error generating CSV:', error);
+      alert('Failed to generate CSV. Please try again.');
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
+  // Pagination handlers
+  const handleNextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+    }
+  };
+
+  const handlePrevPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
+
+  const handlePageClick = (page: number) => {
+    setCurrentPage(page);
+  };
+
+  // Generate page numbers for pagination
+  const getPageNumbers = () => {
+    const pageNumbers = [];
+    const maxPagesToShow = 5;
+    
+    if (totalPages <= maxPagesToShow) {
+      // Show all pages if there are few
+      for (let i = 1; i <= totalPages; i++) {
+        pageNumbers.push(i);
+      }
+    } else {
+      // Always show first page
+      pageNumbers.push(1);
+      
+      // Calculate start and end of middle pages
+      let startPage = Math.max(2, currentPage - 1);
+      let endPage = Math.min(totalPages - 1, currentPage + 1);
+      
+      // Adjust if we're near the beginning
+      if (currentPage <= 3) {
+        endPage = Math.min(totalPages - 1, 4);
+      }
+      
+      // Adjust if we're near the end
+      if (currentPage >= totalPages - 2) {
+        startPage = Math.max(2, totalPages - 3);
+      }
+      
+      // Add ellipsis after first page if needed
+      if (startPage > 2) {
+        pageNumbers.push('...');
+      }
+      
+      // Add middle pages
+      for (let i = startPage; i <= endPage; i++) {
+        pageNumbers.push(i);
+      }
+      
+      // Add ellipsis before last page if needed
+      if (endPage < totalPages - 1) {
+        pageNumbers.push('...');
+      }
+      
+      // Always show last page
+      pageNumbers.push(totalPages);
+    }
+    
+    return pageNumbers;
+  };
+
   const filteredUsers = users.filter(user => 
     user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -205,7 +415,7 @@ const UsersManagement: React.FC = () => {
     user.referral_code?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const totalUsers = users.length;
+  const totalUsers = totalCount;
   const adminUsers = users.filter(u => u.is_admin).length;
   const totalWalletBalance = users.reduce((sum, u) => sum + Number(u.wallet_balance), 0);
   const activeUsers = users.filter(u => {
@@ -239,6 +449,25 @@ const UsersManagement: React.FC = () => {
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Users Management</h1>
                 <p className="text-sm text-gray-500 dark:text-gray-400">{totalUsers} total users</p>
               </div>
+            </div>
+            
+            <div className="flex space-x-3">
+              <button
+                onClick={handleExportPdf}
+                disabled={exportLoading || filteredUsers.length === 0}
+                className="flex items-center px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50"
+              >
+                <FileText size={16} className="mr-2" />
+                Export PDF
+              </button>
+              <button
+                onClick={handleExportCsv}
+                disabled={exportLoading || filteredUsers.length === 0}
+                className="flex items-center px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50"
+              >
+                <Download size={16} className="mr-2" />
+                Export CSV
+              </button>
             </div>
           </div>
         </div>
@@ -449,6 +678,47 @@ const UsersManagement: React.FC = () => {
             </table>
           </div>
         </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex justify-between items-center mt-6">
+            <div className="text-sm text-gray-600 dark:text-gray-400">
+              Showing {Math.min((currentPage - 1) * itemsPerPage + 1, totalCount)} to {Math.min(currentPage * itemsPerPage, totalCount)} of {totalCount} users
+            </div>
+            <div className="flex space-x-2">
+              <button
+                onClick={handlePrevPage}
+                disabled={currentPage === 1}
+                className="px-3 py-1 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <ChevronLeft size={16} />
+              </button>
+              
+              {getPageNumbers().map((page, index) => (
+                <button
+                  key={index}
+                  onClick={() => typeof page === 'number' ? handlePageClick(page) : null}
+                  disabled={page === '...'}
+                  className={`px-3 py-1 rounded-md ${
+                    page === currentPage
+                      ? 'bg-[#0F9D58] text-white'
+                      : 'border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300'
+                  } ${page === '...' ? 'cursor-default' : ''}`}
+                >
+                  {page}
+                </button>
+              ))}
+              
+              <button
+                onClick={handleNextPage}
+                disabled={currentPage === totalPages}
+                className="px-3 py-1 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+        )}
 
         {filteredUsers.length === 0 && (
           <div className="text-center py-12">

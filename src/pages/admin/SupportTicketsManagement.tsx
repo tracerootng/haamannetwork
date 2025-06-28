@@ -19,7 +19,11 @@ import {
   ChevronDown,
   ChevronUp,
   X,
-  UserCheck
+  UserCheck,
+  Download,
+  FileText,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../store/authStore';
@@ -29,6 +33,8 @@ import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import { formatDate } from '../../lib/utils';
 import { format } from 'date-fns';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
 
 const SupportTicketsManagement: React.FC = () => {
   const navigate = useNavigate();
@@ -48,6 +54,13 @@ const SupportTicketsManagement: React.FC = () => {
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [updatingPriority, setUpdatingPriority] = useState(false);
   const [assigningTicket, setAssigningTicket] = useState(false);
+  const [exportLoading, setExportLoading] = useState(false);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const itemsPerPage = 10;
 
   useEffect(() => {
     if (!user?.isAdmin) {
@@ -55,7 +68,7 @@ const SupportTicketsManagement: React.FC = () => {
       return;
     }
     fetchTickets();
-  }, [user, navigate]);
+  }, [user, navigate, currentPage, statusFilter, categoryFilter, priorityFilter]);
 
   const fetchTickets = async (showRefreshIndicator = false) => {
     if (showRefreshIndicator) {
@@ -65,6 +78,35 @@ const SupportTicketsManagement: React.FC = () => {
     }
 
     try {
+      // First get the total count for pagination
+      let countQuery = supabase
+        .from('support_tickets')
+        .select('id', { count: 'exact', head: true });
+      
+      // Apply filters to count query
+      if (statusFilter !== 'all') {
+        countQuery = countQuery.eq('status', statusFilter);
+      }
+      
+      if (categoryFilter !== 'all') {
+        countQuery = countQuery.eq('category', categoryFilter);
+      }
+      
+      if (priorityFilter !== 'all') {
+        countQuery = countQuery.eq('priority', priorityFilter);
+      }
+      
+      const { count, error: countError } = await countQuery;
+      
+      if (countError) throw countError;
+      
+      setTotalCount(count || 0);
+      setTotalPages(Math.ceil((count || 0) / itemsPerPage));
+      
+      // Calculate range for pagination
+      const from = (currentPage - 1) * itemsPerPage;
+      const to = from + itemsPerPage - 1;
+
       const filters: {
         status?: TicketStatus;
         category?: TicketCategory;
@@ -75,8 +117,41 @@ const SupportTicketsManagement: React.FC = () => {
       if (categoryFilter !== 'all') filters.category = categoryFilter;
       if (priorityFilter !== 'all') filters.priority = priorityFilter;
 
-      const allTickets = await supportAPI.getAllTickets(filters);
-      setTickets(allTickets);
+      // Now fetch the actual data with pagination
+      let query = supabase
+        .from('support_tickets')
+        .select(`
+          *,
+          profiles!support_tickets_user_id_fkey (
+            name,
+            email,
+            phone
+          )
+        `)
+        .range(from, to);
+      
+      // Apply filters
+      if (statusFilter !== 'all') {
+        query = query.eq('status', statusFilter);
+      }
+      
+      if (categoryFilter !== 'all') {
+        query = query.eq('category', categoryFilter);
+      }
+      
+      if (priorityFilter !== 'all') {
+        query = query.eq('priority', priorityFilter);
+      }
+      
+      // Order by priority (high to low) and then by last message time (most recent first)
+      query = query
+        .order('priority', { ascending: false, nullsFirst: false })
+        .order('last_message_at', { ascending: false });
+      
+      const { data, error } = await query;
+
+      if (error) throw error;
+      setTickets(data || []);
     } catch (error) {
       console.error('Error fetching tickets:', error);
     } finally {
@@ -273,6 +348,191 @@ const SupportTicketsManagement: React.FC = () => {
     }
   };
 
+  // Export to PDF function
+  const handleExportPdf = async () => {
+    setExportLoading(true);
+    try {
+      const doc = new jsPDF();
+      
+      // Add title
+      doc.setFontSize(18);
+      doc.setTextColor(15, 157, 88); // Primary color #0F9D58
+      doc.text('Haaman Network - Support Tickets Report', 105, 15, { align: 'center' });
+      
+      // Add filters info
+      doc.setFontSize(10);
+      doc.setTextColor(100);
+      let filterText = `Status: ${statusFilter === 'all' ? 'All' : getStatusLabel(statusFilter as TicketStatus)}, Category: ${categoryFilter === 'all' ? 'All' : categoryFilter}, Priority: ${priorityFilter === 'all' ? 'All' : priorityFilter}`;
+      if (searchQuery) filterText += `, Search: "${searchQuery}"`;
+      doc.text(filterText, 105, 22, { align: 'center' });
+      
+      // Add date
+      doc.text(`Generated: ${new Date().toLocaleString()}`, 105, 27, { align: 'center' });
+      
+      // Add summary
+      doc.setFontSize(12);
+      doc.setTextColor(0);
+      doc.text('Summary:', 14, 35);
+      
+      doc.setFontSize(10);
+      doc.text(`Total Tickets: ${totalCount}`, 14, 42);
+      
+      const openTickets = tickets.filter(t => t.status === 'open' || t.status === 'pending_admin_reply').length;
+      const pendingUserTickets = tickets.filter(t => t.status === 'pending_user_reply').length;
+      const closedTickets = tickets.filter(t => t.status === 'closed').length;
+      
+      doc.text(`Open/Awaiting Reply: ${openTickets}`, 14, 48);
+      doc.text(`Awaiting User: ${pendingUserTickets}`, 14, 54);
+      doc.text(`Closed: ${closedTickets}`, 14, 60);
+      
+      // Add table
+      const tableColumn = ["Subject", "Category", "Status", "Priority", "Customer", "Last Updated"];
+      const tableRows = filteredTickets.map(ticket => [
+        ticket.subject.length > 30 ? ticket.subject.substring(0, 30) + '...' : ticket.subject,
+        ticket.category.toUpperCase(),
+        getStatusLabel(ticket.status as TicketStatus),
+        ticket.priority.toUpperCase(),
+        ticket.profiles?.name || 'Unknown',
+        formatDate(ticket.last_message_at)
+      ]);
+      
+      // @ts-ignore - jspdf-autotable types are not included
+      doc.autoTable({
+        head: [tableColumn],
+        body: tableRows,
+        startY: 70,
+        styles: { fontSize: 8, cellPadding: 3 },
+        headStyles: { fillColor: [15, 157, 88], textColor: [255, 255, 255] },
+        alternateRowStyles: { fillColor: [240, 240, 240] },
+        columnStyles: {
+          0: { cellWidth: 50 }, // Subject
+          1: { cellWidth: 25 }, // Category
+          2: { cellWidth: 30 }, // Status
+          3: { cellWidth: 20 }, // Priority
+          4: { cellWidth: 35 }, // Customer
+          5: { cellWidth: 30 } // Last Updated
+        },
+      });
+      
+      // Save the PDF
+      doc.save(`haaman-support-tickets-${new Date().toISOString().split('T')[0]}.pdf`);
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      alert('Failed to generate PDF. Please try again.');
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
+  // Export to CSV function
+  const handleExportCsv = () => {
+    setExportLoading(true);
+    try {
+      // Create CSV content
+      const headers = ['Subject', 'Category', 'Status', 'Priority', 'Customer', 'Email', 'Created Date', 'Last Updated'];
+      
+      const rows = filteredTickets.map(ticket => [
+        ticket.subject,
+        ticket.category,
+        ticket.status,
+        ticket.priority,
+        ticket.profiles?.name || 'Unknown',
+        ticket.profiles?.email || 'Unknown',
+        ticket.created_at,
+        ticket.last_message_at
+      ]);
+      
+      // Combine headers and rows
+      const csvContent = [
+        headers.join(','),
+        ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+      ].join('\n');
+      
+      // Create a blob and download link
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `haaman-support-tickets-${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error) {
+      console.error('Error generating CSV:', error);
+      alert('Failed to generate CSV. Please try again.');
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
+  // Pagination handlers
+  const handleNextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+    }
+  };
+
+  const handlePrevPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
+
+  const handlePageClick = (page: number) => {
+    setCurrentPage(page);
+  };
+
+  // Generate page numbers for pagination
+  const getPageNumbers = () => {
+    const pageNumbers = [];
+    const maxPagesToShow = 5;
+    
+    if (totalPages <= maxPagesToShow) {
+      // Show all pages if there are few
+      for (let i = 1; i <= totalPages; i++) {
+        pageNumbers.push(i);
+      }
+    } else {
+      // Always show first page
+      pageNumbers.push(1);
+      
+      // Calculate start and end of middle pages
+      let startPage = Math.max(2, currentPage - 1);
+      let endPage = Math.min(totalPages - 1, currentPage + 1);
+      
+      // Adjust if we're near the beginning
+      if (currentPage <= 3) {
+        endPage = Math.min(totalPages - 1, 4);
+      }
+      
+      // Adjust if we're near the end
+      if (currentPage >= totalPages - 2) {
+        startPage = Math.max(2, totalPages - 3);
+      }
+      
+      // Add ellipsis after first page if needed
+      if (startPage > 2) {
+        pageNumbers.push('...');
+      }
+      
+      // Add middle pages
+      for (let i = startPage; i <= endPage; i++) {
+        pageNumbers.push(i);
+      }
+      
+      // Add ellipsis before last page if needed
+      if (endPage < totalPages - 1) {
+        pageNumbers.push('...');
+      }
+      
+      // Always show last page
+      pageNumbers.push(totalPages);
+    }
+    
+    return pageNumbers;
+  };
+
   const filteredTickets = tickets.filter(ticket => {
     // Search in subject, user name, or user email
     const matchesSearch = 
@@ -280,12 +540,7 @@ const SupportTicketsManagement: React.FC = () => {
       (ticket.profiles?.name && ticket.profiles.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
       (ticket.profiles?.email && ticket.profiles.email.toLowerCase().includes(searchQuery.toLowerCase()));
     
-    // Filter by status, category, and priority
-    const matchesStatus = statusFilter === 'all' || ticket.status === statusFilter;
-    const matchesCategory = categoryFilter === 'all' || ticket.category === categoryFilter;
-    const matchesPriority = priorityFilter === 'all' || ticket.priority === priorityFilter;
-    
-    return matchesSearch && matchesStatus && matchesCategory && matchesPriority;
+    return matchesSearch;
   });
 
   // Sort tickets: critical first, then high, then by last_message_at
@@ -326,18 +581,36 @@ const SupportTicketsManagement: React.FC = () => {
               </button>
               <div>
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Support Tickets</h1>
-                <p className="text-sm text-gray-500 dark:text-gray-400">{tickets.length} total tickets</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">{totalCount} total tickets</p>
               </div>
             </div>
             
-            <button
-              onClick={handleRefresh}
-              disabled={refreshing}
-              className="flex items-center px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
-            >
-              <RefreshCw size={16} className={`mr-2 ${refreshing ? 'animate-spin' : ''}`} />
-              Refresh
-            </button>
+            <div className="flex space-x-3">
+              <button
+                onClick={handleExportPdf}
+                disabled={exportLoading || filteredTickets.length === 0}
+                className="flex items-center px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50"
+              >
+                <FileText size={16} className="mr-2" />
+                Export PDF
+              </button>
+              <button
+                onClick={handleExportCsv}
+                disabled={exportLoading || filteredTickets.length === 0}
+                className="flex items-center px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50"
+              >
+                <Download size={16} className="mr-2" />
+                Export CSV
+              </button>
+              <button
+                onClick={handleRefresh}
+                disabled={refreshing}
+                className="flex items-center px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+              >
+                <RefreshCw size={16} className={`mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+                Refresh
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -359,7 +632,10 @@ const SupportTicketsManagement: React.FC = () => {
             
             <select
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as TicketStatus | 'all')}
+              onChange={(e) => {
+                setStatusFilter(e.target.value as TicketStatus | 'all');
+                setCurrentPage(1); // Reset to first page when filter changes
+              }}
               className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0F9D58]"
             >
               <option value="all">All Status</option>
@@ -371,7 +647,10 @@ const SupportTicketsManagement: React.FC = () => {
             
             <select
               value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value as TicketCategory | 'all')}
+              onChange={(e) => {
+                setCategoryFilter(e.target.value as TicketCategory | 'all');
+                setCurrentPage(1); // Reset to first page when filter changes
+              }}
               className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0F9D58]"
             >
               <option value="all">All Categories</option>
@@ -384,7 +663,10 @@ const SupportTicketsManagement: React.FC = () => {
             
             <select
               value={priorityFilter}
-              onChange={(e) => setPriorityFilter(e.target.value as TicketPriority | 'all')}
+              onChange={(e) => {
+                setPriorityFilter(e.target.value as TicketPriority | 'all');
+                setCurrentPage(1); // Reset to first page when filter changes
+              }}
               className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0F9D58]"
             >
               <option value="all">All Priorities</option>
@@ -470,6 +752,33 @@ const SupportTicketsManagement: React.FC = () => {
                   </div>
                 )}
               </div>
+              
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <div className="p-4 border-t border-gray-200 dark:border-gray-700">
+                  <div className="flex justify-between items-center">
+                    <button
+                      onClick={handlePrevPage}
+                      disabled={currentPage === 1}
+                      className="px-3 py-1 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <ChevronLeft size={16} />
+                    </button>
+                    
+                    <div className="text-sm text-gray-600 dark:text-gray-400">
+                      Page {currentPage} of {totalPages}
+                    </div>
+                    
+                    <button
+                      onClick={handleNextPage}
+                      disabled={currentPage === totalPages}
+                      className="px-3 py-1 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <ChevronRight size={16} />
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
