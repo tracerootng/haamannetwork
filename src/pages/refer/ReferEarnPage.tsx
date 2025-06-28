@@ -45,25 +45,15 @@ const ReferEarnPage: React.FC = () => {
   const referralLink = `https://haamannetwork.com/signup?ref=${referralCode}`;
 
   useEffect(() => {
-    console.log("ReferEarnPage mounted with user:", user?.id);
     if (user) {
-      console.log("User data available:", {
-        id: user.id,
-        totalReferrals: user.totalReferrals,
-        referralEarnings: user.referralEarnings
-      });
       fetchReferrals();
       fetchReferralStats();
     }
   }, [user?.id]); // Only depend on user.id to prevent infinite loops
 
   const fetchReferrals = async () => {
-    if (!user) {
-      console.log("fetchReferrals: No user available");
-      return;
-    }
+    if (!user) return;
     
-    console.log("fetchReferrals: Starting fetch for user", user.id);
     setLoading(true);
     try {
       // Get users who were referred by the current user
@@ -74,7 +64,6 @@ const ReferEarnPage: React.FC = () => {
         .order('created_at', { ascending: false });
       
       if (error) throw error;
-      console.log(`fetchReferrals: Found ${data?.length || 0} referrals`);
       setReferrals(data || []);
     } catch (error) {
       console.error('Error fetching referrals:', error);
@@ -84,12 +73,8 @@ const ReferEarnPage: React.FC = () => {
   };
 
   const fetchReferralStats = async () => {
-    if (!user) {
-      console.log("fetchReferralStats: No user available");
-      return;
-    }
+    if (!user) return;
     
-    console.log("fetchReferralStats: Starting fetch for user", user.id);
     setLoadingRewardStats(true);
     try {
       // Get referral settings from admin settings
@@ -109,7 +94,6 @@ const ReferEarnPage: React.FC = () => {
       if (settingsError) {
         console.error('Error fetching referral settings:', settingsError);
       } else if (settingsData) {
-        console.log("fetchReferralStats: Settings data received:", settingsData);
         const settings: Record<string, string> = {};
         settingsData.forEach(setting => {
           settings[setting.key] = setting.value;
@@ -125,18 +109,10 @@ const ReferEarnPage: React.FC = () => {
           
         if (rewardError) {
           console.error('Error fetching reward status:', rewardError);
-        } else {
-          console.log("fetchReferralStats: Reward data:", rewardData);
         }
         
         const totalReferrals = user.totalReferrals || 0;
         const requiredReferrals = parseInt(settings.referral_reward_count || '5');
-        
-        console.log("fetchReferralStats: Calculating eligibility:", {
-          totalReferrals,
-          requiredReferrals,
-          rewardClaimed: !!rewardData
-        });
         
         const updatedStats = {
           totalReferrals: totalReferrals,
@@ -152,7 +128,6 @@ const ReferEarnPage: React.FC = () => {
           cashAmount: parseInt(settings.referral_reward_cash_amount || '1000')
         };
         
-        console.log("fetchReferralStats: Setting updated stats:", updatedStats);
         setReferralStats(updatedStats);
       }
     } catch (error) {
@@ -434,14 +409,6 @@ const ReferEarnPage: React.FC = () => {
     
     return `Refer ${referralStats.requiredReferrals - referralStats.totalReferrals} more friend${referralStats.requiredReferrals - referralStats.totalReferrals !== 1 ? 's' : ''}`;
   };
-
-  // Debug log for render
-  console.log("ReferEarnPage rendering with stats:", {
-    user: user?.id,
-    totalReferrals: user?.totalReferrals,
-    referralStats,
-    loadingRewardStats
-  });
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">

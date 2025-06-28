@@ -192,8 +192,6 @@ export const useAuthStore = create<AuthState>()(
           // Verify referral code if provided
           let referrerProfile = null;
           if (referralCode && referralCode.trim() !== '') {
-            console.log('Verifying referral code:', referralCode);
-            
             // Format the referral code properly before querying
             const formattedReferralCode = referralCode.trim();
             
@@ -207,10 +205,8 @@ export const useAuthStore = create<AuthState>()(
               console.error('Error getting referrer profile:', referrerError);
               // Don't throw an error, just log it and continue with signup
             } else if (referrer) {
-              console.log('Referrer found:', referrer);
               referrerProfile = referrer;
             } else {
-              console.log('No referrer found for code:', formattedReferralCode);
               throw new Error('Invalid referral code. Please check and try again.');
             }
           }
@@ -249,8 +245,6 @@ export const useAuthStore = create<AuthState>()(
               created_at: new Date().toISOString(),
               bvn: bvn || null,
             };
-
-            console.log('Creating profile with data:', { ...profile, referred_by: referrerProfile?.id || 'null' });
 
             const { data: insertedProfile, error: profileError } = await supabase
               .from('profiles')
@@ -301,7 +295,6 @@ export const useAuthStore = create<AuthState>()(
 
             // Update referrer's total referrals count
             if (referrerProfile) {
-              console.log('Updating referrer profile:', referrerProfile.id);
               const newTotalReferrals = (referrerProfile.total_referrals || 0) + 1;
               
               const { error: updateError } = await supabase
@@ -313,8 +306,6 @@ export const useAuthStore = create<AuthState>()(
                 
               if (updateError) {
                 console.error('Error updating referrer profile:', updateError);
-              } else {
-                console.log('Successfully updated referrer profile with new total:', newTotalReferrals);
               }
                 
               // Log the referral
@@ -443,12 +434,8 @@ export const useAuthStore = create<AuthState>()(
 
       refreshUserData: async () => {
         const state = get();
-        if (!state.user) {
-          console.log("refreshUserData: No user to refresh");
-          return;
-        }
+        if (!state.user) return;
 
-        console.log("refreshUserData: Refreshing data for user", state.user.id);
         try {
           const { data: profile, error } = await supabase
             .from('profiles')
@@ -457,18 +444,11 @@ export const useAuthStore = create<AuthState>()(
             .single();
 
           if (error) {
-            console.error("refreshUserData: Error fetching profile:", error);
+            console.error("Error fetching profile:", error);
             throw error;
           }
 
           if (profile) {
-            console.log("refreshUserData: Got updated profile data:", {
-              id: profile.id,
-              totalReferrals: profile.total_referrals,
-              referralEarnings: profile.referral_earnings,
-              walletBalance: profile.wallet_balance
-            });
-            
             set({
               user: {
                 id: profile.id,
@@ -488,8 +468,6 @@ export const useAuthStore = create<AuthState>()(
                 bvn: profile.bvn,
               },
             });
-            
-            console.log("refreshUserData: User state updated successfully");
           }
         } catch (error) {
           console.error('Error refreshing user data:', error);
@@ -591,12 +569,6 @@ export const useAuthStore = create<AuthState>()(
               get().initRealtimeSubscription();
             }
           } else if (profile) {
-            console.log("checkAuth: Found existing profile with data:", {
-              id: profile.id,
-              totalReferrals: profile.total_referrals,
-              referralEarnings: profile.referral_earnings
-            });
-            
             set({
               user: {
                 id: profile.id,
@@ -690,8 +662,6 @@ export const useAuthStore = create<AuthState>()(
         if (!state.user) return;
         
         try {
-          console.log('Initializing realtime subscription for user:', state.user.id);
-          
           // Subscribe to changes in the profiles table for the current user
           const subscription = supabase
             .channel('profile-changes')
@@ -704,12 +674,8 @@ export const useAuthStore = create<AuthState>()(
                 filter: `id=eq.${state.user.id}`,
               },
               (payload) => {
-                console.log('Received realtime update:', payload);
-                
                 // Update the user's wallet balance in the local state
                 if (payload.new && payload.new.wallet_balance !== undefined) {
-                  console.log('Updating wallet balance from realtime event:', payload.new.wallet_balance);
-                  
                   set((state) => ({
                     user: state.user ? {
                       ...state.user,
@@ -729,11 +695,6 @@ export const useAuthStore = create<AuthState>()(
                 if (payload.new && 
                    (payload.new.total_referrals !== undefined || 
                     payload.new.referral_earnings !== undefined)) {
-                  console.log('Updating referral stats from realtime event:', {
-                    totalReferrals: payload.new.total_referrals,
-                    referralEarnings: payload.new.referral_earnings
-                  });
-                  
                   set((state) => ({
                     user: state.user ? {
                       ...state.user,
@@ -763,7 +724,6 @@ export const useAuthStore = create<AuthState>()(
         const { realtimeSubscription } = get();
         
         if (realtimeSubscription) {
-          console.log('Cleaning up realtime subscription');
           supabase.removeChannel(realtimeSubscription);
           set({ realtimeSubscription: null });
         }
@@ -776,8 +736,6 @@ export const useAuthStore = create<AuthState>()(
           if (!code.trim()) {
             return false;
           }
-          
-          console.log('Verifying referral code:', code);
           
           // Format the code properly before checking
           const formattedCode = code.trim();
@@ -794,7 +752,6 @@ export const useAuthStore = create<AuthState>()(
             return false;
           }
           
-          console.log('Verification result:', data ? 'Valid' : 'Invalid');
           return !!data; // Return true if data exists, false otherwise
         } catch (error) {
           console.error('Error verifying referral code:', error);
