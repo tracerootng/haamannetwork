@@ -293,33 +293,36 @@ export const useAuthStore = create<AuthState>()(
               }
             }
 
-            // Update referrer's total referrals count
+            // Update referrer's total referrals count using the Edge Function
             if (referrerProfile) {
-              const newTotalReferrals = (referrerProfile.total_referrals || 0) + 1;
-              
-              const { error: updateError } = await supabase
-                .from('profiles')
-                .update({ 
-                  total_referrals: newTotalReferrals
-                })
-                .eq('id', referrerProfile.id);
+              try {
+                const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+                if (!supabaseUrl) {
+                  throw new Error('Supabase URL not configured');
+                }
                 
-              if (updateError) {
-                console.error('Error updating referrer profile:', updateError);
+                const response = await fetch(`${supabaseUrl}/functions/v1/update-referral-count`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+                  },
+                  body: JSON.stringify({
+                    referrerId: referrerProfile.id,
+                    referredUserId: data.user.id,
+                    referredUserName: name,
+                    referralCode: referralCode
+                  }),
+                });
+                
+                if (!response.ok) {
+                  const errorText = await response.text();
+                  console.error('Error updating referral count:', errorText);
+                }
+              } catch (error) {
+                console.error('Error calling update-referral-count function:', error);
+                // Don't throw here, as the signup was successful
               }
-                
-              // Log the referral
-              await supabase.from('admin_logs').insert([{
-                admin_id: null,
-                action: 'new_referral',
-                details: { 
-                  referrer_id: referrerProfile.id,
-                  referrer_name: referrerProfile.name,
-                  referred_user_id: data.user.id,
-                  referred_user_name: name,
-                  referral_code: referralCode
-                },
-              }]);
             }
 
             // Set user in state
