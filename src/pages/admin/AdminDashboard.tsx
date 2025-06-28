@@ -69,8 +69,12 @@ const AdminDashboard: React.FC = () => {
         .select('amount, status, created_at');
 
       const totalTransactions = transactions?.length || 0;
-      const totalRevenue = transactions?.reduce((sum, t) => 
-        t.status === 'success' ? sum + Number(t.amount) : sum, 0) || 0;
+      
+      // Calculate total revenue from successful transactions only
+      const totalRevenue = transactions
+        ?.filter(t => t.status === 'success')
+        .reduce((sum, t) => sum + Number(t.amount), 0) || 0;
+        
       const pendingTransactions = transactions?.filter(t => t.status === 'pending').length || 0;
 
       // Active users (users who made transactions in last 30 days)
@@ -82,7 +86,12 @@ const AdminDashboard: React.FC = () => {
         .select('user_id')
         .gte('created_at', thirtyDaysAgo.toISOString());
 
-      const uniqueActiveUsers = new Set(activeTransactions?.map(t => t.user_id)).size;
+      // Count unique user IDs from transactions
+      const uniqueActiveUserIds = new Set();
+      activeTransactions?.forEach(t => {
+        if (t.user_id) uniqueActiveUserIds.add(t.user_id);
+      });
+      const uniqueActiveUsers = uniqueActiveUserIds.size;
 
       // New users today
       const today = new Date();
