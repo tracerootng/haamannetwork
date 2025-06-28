@@ -23,10 +23,18 @@ import {
   Users,
   ToggleLeft,
   ToggleRight,
-  DollarSign
+  DollarSign,
+  Wifi,
+  Zap,
+  Tv,
+  BookOpen,
+  Ticket,
+  ShoppingBag,
+  MessageCircle
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../store/authStore';
+import { useServiceConfigStore, ServiceStatus } from '../../store/serviceConfigStore';
 
 type AdminSetting = {
   id: string;
@@ -38,12 +46,15 @@ type AdminSetting = {
 const AdminSettings: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuthStore();
+  const { config: serviceConfig, fetchConfig, updateServiceStatus } = useServiceConfigStore();
   const [settings, setSettings] = useState<AdminSetting[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState<Record<string, string>>({});
   const [showApiToken, setShowApiToken] = useState(false);
   const [showFlutterwaveEncryptionKey, setShowFlutterwaveEncryptionKey] = useState(false);
+  const [loadingServices, setLoadingServices] = useState(false);
+  const [savingService, setSavingService] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user?.isAdmin) {
@@ -51,7 +62,8 @@ const AdminSettings: React.FC = () => {
       return;
     }
     fetchSettings();
-  }, [user, navigate]);
+    fetchConfig();
+  }, [user, navigate, fetchConfig]);
 
   const fetchSettings = async () => {
     try {
@@ -164,6 +176,52 @@ const AdminSettings: React.FC = () => {
         key: 'referral_invite_limit',
         value: '5',
         description: 'Maximum number of referrals a user can make before needing to claim a reward'
+      },
+      // Service status settings
+      {
+        key: 'service_airtime_status',
+        value: 'active',
+        description: 'Status for airtime service: active, disabled, or coming_soon'
+      },
+      {
+        key: 'service_data_status',
+        value: 'active',
+        description: 'Status for data service: active, disabled, or coming_soon'
+      },
+      {
+        key: 'service_electricity_status',
+        value: 'active',
+        description: 'Status for electricity service: active, disabled, or coming_soon'
+      },
+      {
+        key: 'service_tv_status',
+        value: 'coming_soon',
+        description: 'Status for TV service: active, disabled, or coming_soon'
+      },
+      {
+        key: 'service_waec_status',
+        value: 'coming_soon',
+        description: 'Status for WAEC service: active, disabled, or coming_soon'
+      },
+      {
+        key: 'service_voucher_status',
+        value: 'coming_soon',
+        description: 'Status for voucher redemption service: active, disabled, or coming_soon'
+      },
+      {
+        key: 'service_support_status',
+        value: 'active',
+        description: 'Status for support ticket service: active, disabled, or coming_soon'
+      },
+      {
+        key: 'service_refer_status',
+        value: 'active',
+        description: 'Status for refer & earn service: active, disabled, or coming_soon'
+      },
+      {
+        key: 'service_store_status',
+        value: 'active',
+        description: 'Status for e-commerce store: active, disabled, or coming_soon'
       }
     ];
 
@@ -256,6 +314,29 @@ const AdminSettings: React.FC = () => {
     setFormData(prev => ({ ...prev, [key]: value }));
   };
 
+  const handleServiceStatusChange = async (service: string, status: ServiceStatus) => {
+    setSavingService(service);
+    try {
+      await updateServiceStatus(service, status);
+      
+      // Log admin action
+      await supabase.from('admin_logs').insert([{
+        admin_id: user?.id,
+        action: 'update_service_status',
+        details: { 
+          service,
+          status,
+          previous_status: serviceConfig[service] || 'active'
+        },
+      }]);
+    } catch (error) {
+      console.error(`Error updating ${service} status:`, error);
+      alert(`Error updating ${service} status. Please try again.`);
+    } finally {
+      setSavingService(null);
+    }
+  };
+
   const getSettingIcon = (key: string) => {
     switch (key) {
       case 'referral_bonus_percentage':
@@ -328,6 +409,31 @@ const AdminSettings: React.FC = () => {
     }
   };
 
+  const getServiceIcon = (service: string) => {
+    switch (service) {
+      case 'airtime':
+        return <Phone size={20} className="text-blue-500" />;
+      case 'data':
+        return <Wifi size={20} className="text-green-500" />;
+      case 'electricity':
+        return <Zap size={20} className="text-yellow-500" />;
+      case 'tv':
+        return <Tv size={20} className="text-purple-500" />;
+      case 'waec':
+        return <BookOpen size={20} className="text-orange-500" />;
+      case 'voucher':
+        return <Gift size={20} className="text-pink-500" />;
+      case 'support':
+        return <MessageCircle size={20} className="text-red-500" />;
+      case 'refer':
+        return <Users size={20} className="text-indigo-500" />;
+      case 'store':
+        return <ShoppingBag size={20} className="text-[#0F9D58]" />;
+      default:
+        return <Settings size={20} className="text-gray-500" />;
+    }
+  };
+
   const settingCategories = {
     'API Configuration': ['maskawa_token', 'maskawa_base_url', 'flutterwave_public_key', 'flutterwave_encryption_key'],
     'General': ['site_name', 'support_email', 'support_phone'],
@@ -340,6 +446,19 @@ const AdminSettings: React.FC = () => {
     'Transaction Limits': ['min_transaction_amount', 'max_transaction_amount', 'max_wallet_balance'],
     'System': ['maintenance_mode'],
   };
+
+  // Services configuration
+  const services = [
+    { id: 'airtime', name: 'Airtime Recharge', description: 'Buy airtime for any network instantly' },
+    { id: 'data', name: 'Data Bundles', description: 'Purchase data plans for any network' },
+    { id: 'electricity', name: 'Electricity Bills', description: 'Pay electricity bills for any DISCO' },
+    { id: 'tv', name: 'TV Subscriptions', description: 'Pay for DSTV, GOTV, and Startimes' },
+    { id: 'waec', name: 'WAEC Scratch Cards', description: 'Purchase WAEC scratch cards instantly' },
+    { id: 'voucher', name: 'Redeem Voucher', description: 'Redeem vouchers and gift cards' },
+    { id: 'support', name: 'Support Tickets', description: 'Customer support ticket system' },
+    { id: 'refer', name: 'Refer & Earn', description: 'Referral program for users' },
+    { id: 'store', name: 'E-commerce Store', description: 'Online shopping for products' },
+  ];
 
   // Function to determine if a setting should be shown based on dependencies
   const shouldShowSetting = (key: string): boolean => {
@@ -402,6 +521,59 @@ const AdminSettings: React.FC = () => {
       </div>
 
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Service Management Section */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 mb-8">
+          <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Service Management</h2>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+              Control which services are available to users. You can set services as active, disabled, or coming soon.
+            </p>
+          </div>
+          
+          <div className="p-6 space-y-6">
+            {loadingServices ? (
+              <div className="flex justify-center py-4">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#0F9D58]"></div>
+              </div>
+            ) : (
+              <div className="grid gap-6">
+                {services.map((service) => (
+                  <div key={service.id} className="flex items-start space-x-4 pb-6 border-b border-gray-200 dark:border-gray-700 last:border-0 last:pb-0">
+                    <div className="flex-shrink-0 mt-1">
+                      {getServiceIcon(service.id)}
+                    </div>
+                    
+                    <div className="flex-1">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                        <div>
+                          <h3 className="font-medium text-gray-900 dark:text-white">{service.name}</h3>
+                          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{service.description}</p>
+                        </div>
+                        
+                        <div className="min-w-[180px]">
+                          <select
+                            value={serviceConfig[service.id] || 'active'}
+                            onChange={(e) => handleServiceStatusChange(service.id, e.target.value as ServiceStatus)}
+                            disabled={savingService === service.id}
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0F9D58]"
+                          >
+                            <option value="active">Active</option>
+                            <option value="disabled">Disabled</option>
+                            <option value="coming_soon">Coming Soon</option>
+                          </select>
+                          {savingService === service.id && (
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Saving...</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
         {/* Settings Categories */}
         <div className="space-y-8">
           {Object.entries(settingCategories).map(([category, settingKeys]) => (

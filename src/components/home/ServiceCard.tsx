@@ -10,6 +10,7 @@ type ServiceCardProps = {
   path: string;
   color?: string;
   className?: string;
+  state?: any;
 };
 
 const ServiceCard: React.FC<ServiceCardProps> = ({
@@ -19,14 +20,23 @@ const ServiceCard: React.FC<ServiceCardProps> = ({
   path,
   color = 'bg-primary-500',
   className,
+  state,
 }) => {
   const navigate = useNavigate();
+
+  const handleClick = () => {
+    if (state) {
+      navigate(path, { state });
+    } else {
+      navigate(path);
+    }
+  };
 
   return (
     <Card
       className={cn('h-full', className)}
       hoverEffect
-      onClick={() => navigate(path)}
+      onClick={handleClick}
     >
       <div className="flex flex-col h-full">
         <div className={cn('w-12 h-12 rounded-lg flex items-center justify-center mb-3', color)}>

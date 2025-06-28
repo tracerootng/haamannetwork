@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { PlusCircle, Phone, Wifi, Zap, BookOpen, Shield, Clock, Gift, Download, QrCode, ChevronDown, ShoppingBag } from 'lucide-react';
+import { PlusCircle, Phone, Wifi, Zap, BookOpen, Shield, Clock, Gift, Download, QrCode, ChevronDown, ShoppingBag, Tv, MessageCircle, Users } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
+import { useServiceConfigStore } from '../store/serviceConfigStore';
 import { supabase } from '../lib/supabase';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
@@ -12,6 +13,7 @@ import { formatCurrency } from '../lib/utils';
 const HomePage: React.FC = () => {
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuthStore();
+  const { config: serviceConfig, fetchConfig } = useServiceConfigStore();
   const [bannerSettings, setBannerSettings] = useState({
     hero_banner_image: 'https://images.pexels.com/photos/4386321/pexels-photo-4386321.jpeg',
     hero_banner_image_alt: 'https://images.pexels.com/photos/4386321/pexels-photo-4386321.jpeg',
@@ -34,6 +36,7 @@ const HomePage: React.FC = () => {
   const [fetchError, setFetchError] = useState<string | null>(null);
 
   useEffect(() => {
+    fetchConfig();
     const initializeSettings = async () => {
       setIsLoading(true);
       setFetchError(null);
@@ -52,7 +55,7 @@ const HomePage: React.FC = () => {
     };
 
     initializeSettings();
-  }, []);
+  }, [fetchConfig]);
 
   const fetchBannerSettings = async () => {
     try {
@@ -132,38 +135,85 @@ const HomePage: React.FC = () => {
     }
   };
 
+  const getServiceStatus = (serviceId: string) => {
+    return serviceConfig[serviceId] || 'active';
+  };
+
   const services = [
     {
       title: 'Airtime Recharge',
       description: 'Buy airtime for any network instantly',
       icon: <Phone size={24} />,
       path: '/services/airtime',
+      id: 'airtime'
     },
     {
       title: 'Data Bundles',
       description: 'Purchase data plans for any network',
       icon: <Wifi size={24} />,
       path: '/services/data',
+      id: 'data'
     },
     {
       title: 'Electricity Bills',
       description: 'Pay electricity bills for any DISCO',
       icon: <Zap size={24} />,
       path: '/services/electricity',
+      id: 'electricity'
+    },
+    {
+      title: 'TV Subscriptions',
+      description: 'Pay for DSTV, GOTV, and Startimes',
+      icon: <Tv size={24} />,
+      path: '/services/tv',
+      id: 'tv'
     },
     {
       title: 'WAEC Scratch Cards',
       description: 'Purchase WAEC scratch cards instantly',
       icon: <BookOpen size={24} />,
       path: '/services/waec',
+      id: 'waec'
     },
     {
       title: 'E-commerce Store',
       description: 'Shop from our wide range of electronics and gadgets',
       icon: <ShoppingBag size={24} />,
       path: '/store',
+      id: 'store'
+    },
+    {
+      title: 'Support',
+      description: 'Get help with any issues',
+      icon: <MessageCircle size={24} />,
+      path: '/support',
+      id: 'support'
+    },
+    {
+      title: 'Refer & Earn',
+      description: 'Invite friends and earn rewards',
+      icon: <Users size={24} />,
+      path: '/refer',
+      id: 'refer'
     },
   ];
+
+  // Filter services based on their status
+  const filteredServices = services.filter(service => {
+    const status = getServiceStatus(service.id);
+    return status !== 'disabled';
+  }).map(service => {
+    const status = getServiceStatus(service.id);
+    return {
+      ...service,
+      path: status === 'coming_soon' ? '/coming-soon' : service.path,
+      state: status === 'coming_soon' ? { 
+        serviceName: service.title, 
+        serviceDescription: service.description 
+      } : undefined,
+      comingSoon: status === 'coming_soon'
+    };
+  });
 
   const features = [
     {
@@ -336,59 +386,74 @@ const HomePage: React.FC = () => {
       </section>
 
       {/* Product Slideshow Section */}
-      <section className="py-12 sm:py-20 bg-white dark:bg-gray-900">
-        <div className="container-pad">
-          <div className="text-center mb-8 sm:mb-12">
-            <h2 className="text-3xl sm:text-4xl font-bold mb-4">Latest Products</h2>
-            <p className="text-lg sm:text-xl text-gray-600 dark:text-gray-400 max-w-3xl mx-auto">
-              Discover our newest arrivals and trending products with amazing deals and fast delivery.
-            </p>
+      {getServiceStatus('store') !== 'disabled' && (
+        <section className="py-12 sm:py-20 bg-white dark:bg-gray-900">
+          <div className="container-pad">
+            <div className="text-center mb-8 sm:mb-12">
+              <h2 className="text-3xl sm:text-4xl font-bold mb-4">Latest Products</h2>
+              <p className="text-lg sm:text-xl text-gray-600 dark:text-gray-400 max-w-3xl mx-auto">
+                Discover our newest arrivals and trending products with amazing deals and fast delivery.
+              </p>
+            </div>
+            
+            <ProductSlideshow />
+            
+            <div className="text-center mt-6 sm:mt-8">
+              <Button
+                onClick={() => navigate('/store')}
+                className="bg-[#0F9D58] hover:bg-[#0d8a4f] text-white px-6 sm:px-8 py-3 rounded-full font-semibold"
+              >
+                View All Products
+              </Button>
+            </div>
           </div>
-          
-          <ProductSlideshow />
-          
-          <div className="text-center mt-6 sm:mt-8">
-            <Button
-              onClick={() => navigate('/store')}
-              className="bg-[#0F9D58] hover:bg-[#0d8a4f] text-white px-6 sm:px-8 py-3 rounded-full font-semibold"
-            >
-              View All Products
-            </Button>
-          </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* Services Section */}
-      <section className="py-12 sm:py-20 bg-gray-50 dark:bg-gray-800">
-        <div className="container-pad">
-          <div className="text-center mb-12 sm:mb-16">
-            <h2 className="text-3xl sm:text-4xl font-bold mb-4">Our Services</h2>
-            <p className="text-lg sm:text-xl text-gray-600 dark:text-gray-400 max-w-3xl mx-auto">
-              From bill payments to online shopping, experience our comprehensive range of digital services and e-commerce solutions.
-            </p>
-          </div>
+      {filteredServices.length > 0 && (
+        <section className="py-12 sm:py-20 bg-gray-50 dark:bg-gray-800">
+          <div className="container-pad">
+            <div className="text-center mb-12 sm:mb-16">
+              <h2 className="text-3xl sm:text-4xl font-bold mb-4">Our Services</h2>
+              <p className="text-lg sm:text-xl text-gray-600 dark:text-gray-400 max-w-3xl mx-auto">
+                From bill payments to online shopping, experience our comprehensive range of digital services and e-commerce solutions.
+              </p>
+            </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
-            {services.map((service, index) => (
-              <Card
-                key={index}
-                className="p-6 sm:p-8 hover:shadow-xl transition-all duration-300 cursor-pointer group"
-                onClick={() => navigate(service.path)}
-              >
-                <div className="w-12 sm:w-16 h-12 sm:h-16 bg-[#0F9D58] bg-opacity-10 rounded-2xl flex items-center justify-center mb-4 sm:mb-6 group-hover:bg-[#0F9D58] transition-colors duration-300">
-                  <div className="text-[#0F9D58] group-hover:text-white transition-colors duration-300">
-                    {service.icon}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
+              {filteredServices.map((service, index) => (
+                <Card
+                  key={index}
+                  className="p-6 sm:p-8 hover:shadow-xl transition-all duration-300 cursor-pointer group"
+                  onClick={() => {
+                    if (service.comingSoon) {
+                      navigate('/coming-soon', { state: service.state });
+                    } else {
+                      navigate(service.path);
+                    }
+                  }}
+                >
+                  <div className="w-12 sm:w-16 h-12 sm:h-16 bg-[#0F9D58] bg-opacity-10 rounded-2xl flex items-center justify-center mb-4 sm:mb-6 group-hover:bg-[#0F9D58] transition-colors duration-300 relative">
+                    <div className="text-[#0F9D58] group-hover:text-white transition-colors duration-300">
+                      {service.icon}
+                    </div>
+                    {service.comingSoon && (
+                      <div className="absolute -top-2 -right-2 bg-yellow-500 text-white text-xs px-1.5 py-0.5 rounded-full font-bold">
+                        Soon
+                      </div>
+                    )}
                   </div>
-                </div>
-                <h3 className="text-lg sm:text-xl font-semibold mb-3 sm:mb-4">{service.title}</h3>
-                <p className="text-gray-600 dark:text-gray-400 leading-relaxed text-sm sm:text-base">
-                  {service.description}
-                </p>
-              </Card>
-            ))}
+                  <h3 className="text-lg sm:text-xl font-semibold mb-3 sm:mb-4">{service.title}</h3>
+                  <p className="text-gray-600 dark:text-gray-400 leading-relaxed text-sm sm:text-base">
+                    {service.description}
+                  </p>
+                </Card>
+              ))}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* Why Choose Section */}
       <section className="py-12 sm:py-20 bg-white dark:bg-gray-900">

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Phone, 
@@ -21,6 +21,7 @@ import {
   MessageCircle
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
+import { useServiceConfigStore } from '../store/serviceConfigStore';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import ProductSlideshow from '../components/home/ProductSlideshow';
@@ -29,10 +30,15 @@ import { formatCurrency } from '../lib/utils';
 const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuthStore();
+  const { config: serviceConfig, fetchConfig } = useServiceConfigStore();
   const [showBalance, setShowBalance] = useState(true);
   const [isDarkMode, setIsDarkMode] = useState(() => {
     return document.documentElement.classList.contains('dark');
   });
+
+  useEffect(() => {
+    fetchConfig();
+  }, [fetchConfig]);
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -68,31 +74,38 @@ const DashboardPage: React.FC = () => {
     });
   };
 
+  const getServiceStatus = (serviceId: string) => {
+    return serviceConfig[serviceId] || 'active';
+  };
+
   const mainServices = [
     {
       title: 'Airtime',
       icon: <Phone size={20} />,
       path: '/services/airtime',
       color: 'bg-green-100 text-green-600',
+      id: 'airtime'
     },
     {
       title: 'Data',
       icon: <Wifi size={20} />,
       path: '/services/data',
       color: 'bg-green-100 text-green-600',
+      id: 'data'
     },
     {
       title: 'Electricity',
       icon: <Zap size={20} />,
       path: '/services/electricity',
       color: 'bg-green-100 text-green-600',
+      id: 'electricity'
     },
     {
       title: 'TV',
       icon: <Tv size={20} />,
       path: '/services/tv',
       color: 'bg-green-100 text-green-600',
-      comingSoon: true,
+      id: 'tv',
       description: 'Pay for your TV subscriptions including DSTV, GOTV, and Startimes'
     },
   ];
@@ -103,26 +116,29 @@ const DashboardPage: React.FC = () => {
       icon: <Gift size={20} />,
       path: '/voucher',
       color: 'bg-green-100 text-green-600',
-      comingSoon: true,
+      id: 'voucher',
       description: 'Redeem your vouchers and gift cards for amazing rewards and discounts'
     },
     {
-      title: 'Ticket',
-      icon: <Ticket size={20} />,
+      title: 'Support',
+      icon: <MessageCircle size={20} />,
       path: '/support',
       color: 'bg-green-100 text-green-600',
+      id: 'support'
     },
     {
       title: 'Refer & Earn',
       icon: <Users size={20} />,
       path: '/refer',
       color: 'bg-green-100 text-green-600',
+      id: 'refer'
     },
     {
       title: 'More',
       icon: <MoreHorizontal size={20} />,
       path: '/services',
       color: 'bg-green-100 text-green-600',
+      id: 'more'
     },
   ];
 
@@ -136,6 +152,31 @@ const DashboardPage: React.FC = () => {
       bgColor: 'bg-gradient-to-r from-blue-500 to-purple-500',
     },
   ];
+
+  // Filter services based on their status
+  const filteredMainServices = mainServices.filter(service => {
+    const status = getServiceStatus(service.id);
+    return status !== 'disabled';
+  }).map(service => {
+    const status = getServiceStatus(service.id);
+    return {
+      ...service,
+      comingSoon: status === 'coming_soon'
+    };
+  });
+
+  const filteredSecondaryServices = secondaryServices.filter(service => {
+    if (service.id === 'more') return true; // Always show "More" option
+    const status = getServiceStatus(service.id);
+    return status !== 'disabled';
+  }).map(service => {
+    if (service.id === 'more') return service; // Don't modify "More" option
+    const status = getServiceStatus(service.id);
+    return {
+      ...service,
+      comingSoon: status === 'coming_soon'
+    };
+  });
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -217,7 +258,7 @@ const DashboardPage: React.FC = () => {
       <div className="px-4 py-6">
         {/* Main Services */}
         <div className="grid grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
-          {mainServices.map((service, index) => (
+          {filteredMainServices.map((service, index) => (
             <button
               key={index}
               onClick={() => {
@@ -246,7 +287,7 @@ const DashboardPage: React.FC = () => {
 
         {/* Secondary Services */}
         <div className="grid grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
-          {secondaryServices.map((service, index) => (
+          {filteredSecondaryServices.map((service, index) => (
             <button
               key={index}
               onClick={() => {
@@ -274,117 +315,124 @@ const DashboardPage: React.FC = () => {
         </div>
 
         {/* Product Slideshow Section */}
-        <div className="mb-6 sm:mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white">Latest Products</h2>
-            <button
-              onClick={() => navigate('/store')}
-              className="text-[#0F9D58] text-sm font-medium hover:underline"
-            >
-              View All →
-            </button>
+        {getServiceStatus('store') !== 'disabled' && (
+          <div className="mb-6 sm:mb-8">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white">Latest Products</h2>
+              <a href="/store" className="text-[#0F9D58] text-sm font-medium">View All</a>
+            </div>
+            
+            <ProductSlideshow />
           </div>
-          
-          <ProductSlideshow />
-        </div>
+        )}
 
         {/* Promotional Banners */}
-        <div className="space-y-4 mb-6 sm:mb-8">
-          {promotionalBanners.map((banner) => (
-            <Card key={banner.id} className={`${banner.bgColor} text-white p-4 sm:p-6 overflow-hidden relative`}>
-              <div className="flex items-center justify-between">
-                <div className="flex-1 pr-4">
-                  <h3 className="text-base sm:text-lg font-bold mb-2">{banner.title}</h3>
-                  <p className="text-sm opacity-90 mb-4 leading-relaxed">
-                    {banner.subtitle}
-                  </p>
+        {getServiceStatus('store') !== 'disabled' && (
+          <div className="space-y-4 mb-6 sm:mb-8">
+            {promotionalBanners.map((banner) => (
+              <Card key={banner.id} className={`${banner.bgColor} text-white p-4 sm:p-6 overflow-hidden relative`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex-1 pr-4">
+                    <h3 className="text-base sm:text-lg font-bold mb-2">{banner.title}</h3>
+                    <p className="text-sm opacity-90 mb-4 leading-relaxed">
+                      {banner.subtitle}
+                    </p>
+                    
+                    <div className="flex space-x-3">
+                      <button 
+                        onClick={() => navigate('/store')}
+                        className="bg-white bg-opacity-20 backdrop-blur-sm px-4 py-2 rounded-full text-sm font-medium hover:bg-opacity-30 transition-all"
+                      >
+                        📱 {banner.buttonText}
+                      </button>
+                    </div>
+                  </div>
                   
-                  <div className="flex space-x-3">
-                    <button 
-                      onClick={() => navigate('/store')}
-                      className="bg-white bg-opacity-20 backdrop-blur-sm px-4 py-2 rounded-full text-sm font-medium hover:bg-opacity-30 transition-all"
-                    >
-                      📱 {banner.buttonText}
-                    </button>
+                  <div className="w-20 sm:w-24 h-20 sm:h-24 rounded-2xl overflow-hidden flex-shrink-0">
+                    <img
+                      src={banner.image}
+                      alt={banner.title}
+                      className="w-full h-full object-cover"
+                    />
                   </div>
                 </div>
-                
-                <div className="w-20 sm:w-24 h-20 sm:h-24 rounded-2xl overflow-hidden flex-shrink-0">
-                  <img
-                    src={banner.image}
-                    alt={banner.title}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-              </div>
-            </Card>
-          ))}
-        </div>
+              </Card>
+            ))}
+          </div>
+        )}
 
         {/* Quick Actions */}
         <div className="mt-8 grid grid-cols-4 gap-3 sm:gap-4">
-          <Card 
-            className="p-3 sm:p-4 bg-white dark:bg-gray-800 cursor-pointer hover:shadow-md transition-shadow"
-            onClick={() => navigate('/store')}
-          >
-            <div className="flex flex-col items-center space-y-2 sm:space-y-3">
-              <div className="w-8 sm:w-10 h-8 sm:h-10 bg-green-100 rounded-full flex items-center justify-center">
-                <ShoppingBag size={16} className="text-green-600" />
+          {getServiceStatus('store') !== 'disabled' && (
+            <Card 
+              className="p-3 sm:p-4 bg-white dark:bg-gray-800 cursor-pointer hover:shadow-md transition-shadow"
+              onClick={() => navigate('/store')}
+            >
+              <div className="flex flex-col items-center space-y-2 sm:space-y-3">
+                <div className="w-8 sm:w-10 h-8 sm:h-10 bg-green-100 rounded-full flex items-center justify-center">
+                  <ShoppingBag size={16} className="text-green-600" />
+                </div>
+                <div className="text-center">
+                  <p className="font-medium text-gray-900 dark:text-white text-xs sm:text-sm">Shop</p>
+                  <p className="text-xs text-gray-600 dark:text-gray-400">Browse products</p>
+                </div>
               </div>
-              <div className="text-center">
-                <p className="font-medium text-gray-900 dark:text-white text-xs sm:text-sm">Shop</p>
-                <p className="text-xs text-gray-600 dark:text-gray-400">Browse products</p>
-              </div>
-            </div>
-          </Card>
+            </Card>
+          )}
 
-          <Card 
-            className="p-3 sm:p-4 bg-white dark:bg-gray-800 cursor-pointer hover:shadow-md transition-shadow relative"
-            onClick={() => handleComingSoonNavigation('Education Services', 'Access educational services, course payments, and academic resources')}
-          >
-            <div className="absolute -top-1 -right-1 bg-yellow-500 text-white text-xs px-1.5 py-0.5 rounded-full font-bold">
-              Soon
-            </div>
-            <div className="flex flex-col items-center space-y-2 sm:space-y-3">
-              <div className="w-8 sm:w-10 h-8 sm:h-10 bg-purple-100 rounded-full flex items-center justify-center">
-                <BookOpen size={16} className="text-purple-600" />
+          {getServiceStatus('waec') === 'coming_soon' && (
+            <Card 
+              className="p-3 sm:p-4 bg-white dark:bg-gray-800 cursor-pointer hover:shadow-md transition-shadow relative"
+              onClick={() => handleComingSoonNavigation('Education Services', 'Access educational services, course payments, and academic resources')}
+            >
+              <div className="absolute -top-1 -right-1 bg-yellow-500 text-white text-xs px-1.5 py-0.5 rounded-full font-bold">
+                Soon
               </div>
-              <div className="text-center">
-                <p className="font-medium text-gray-900 dark:text-white text-xs sm:text-sm">Education</p>
-                <p className="text-xs text-gray-600 dark:text-gray-400">WAEC & more</p>
+              <div className="flex flex-col items-center space-y-2 sm:space-y-3">
+                <div className="w-8 sm:w-10 h-8 sm:h-10 bg-purple-100 rounded-full flex items-center justify-center">
+                  <BookOpen size={16} className="text-purple-600" />
+                </div>
+                <div className="text-center">
+                  <p className="font-medium text-gray-900 dark:text-white text-xs sm:text-sm">Education</p>
+                  <p className="text-xs text-gray-600 dark:text-gray-400">WAEC & more</p>
+                </div>
               </div>
-            </div>
-          </Card>
+            </Card>
+          )}
 
-          <Card 
-            className="p-3 sm:p-4 bg-white dark:bg-gray-800 cursor-pointer hover:shadow-md transition-shadow"
-            onClick={() => navigate('/store/orders')}
-          >
-            <div className="flex flex-col items-center space-y-2 sm:space-y-3">
-              <div className="w-8 sm:w-10 h-8 sm:h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                <Package size={16} className="text-blue-600" />
+          {getServiceStatus('store') !== 'disabled' && (
+            <Card 
+              className="p-3 sm:p-4 bg-white dark:bg-gray-800 cursor-pointer hover:shadow-md transition-shadow"
+              onClick={() => navigate('/store/orders')}
+            >
+              <div className="flex flex-col items-center space-y-2 sm:space-y-3">
+                <div className="w-8 sm:w-10 h-8 sm:h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                  <Package size={16} className="text-blue-600" />
+                </div>
+                <div className="text-center">
+                  <p className="font-medium text-gray-900 dark:text-white text-xs sm:text-sm">Orders</p>
+                  <p className="text-xs text-gray-600 dark:text-gray-400">Track orders</p>
+                </div>
               </div>
-              <div className="text-center">
-                <p className="font-medium text-gray-900 dark:text-white text-xs sm:text-sm">Orders</p>
-                <p className="text-xs text-gray-600 dark:text-gray-400">Track orders</p>
-              </div>
-            </div>
-          </Card>
+            </Card>
+          )}
 
-          <Card 
-            className="p-3 sm:p-4 bg-white dark:bg-gray-800 cursor-pointer hover:shadow-md transition-shadow"
-            onClick={() => navigate('/support')}
-          >
-            <div className="flex flex-col items-center space-y-2 sm:space-y-3">
-              <div className="w-8 sm:w-10 h-8 sm:h-10 bg-orange-100 rounded-full flex items-center justify-center">
-                <MessageCircle size={16} className="text-orange-600" />
+          {getServiceStatus('support') !== 'disabled' && (
+            <Card 
+              className="p-3 sm:p-4 bg-white dark:bg-gray-800 cursor-pointer hover:shadow-md transition-shadow"
+              onClick={() => navigate('/support')}
+            >
+              <div className="flex flex-col items-center space-y-2 sm:space-y-3">
+                <div className="w-8 sm:w-10 h-8 sm:h-10 bg-orange-100 rounded-full flex items-center justify-center">
+                  <MessageCircle size={16} className="text-orange-600" />
+                </div>
+                <div className="text-center">
+                  <p className="font-medium text-gray-900 dark:text-white text-xs sm:text-sm">Support</p>
+                  <p className="text-xs text-gray-600 dark:text-gray-400">Get help</p>
+                </div>
               </div>
-              <div className="text-center">
-                <p className="font-medium text-gray-900 dark:text-white text-xs sm:text-sm">Support</p>
-                <p className="text-xs text-gray-600 dark:text-gray-400">Get help</p>
-              </div>
-            </div>
-          </Card>
+            </Card>
+          )}
         </div>
       </div>
     </div>
