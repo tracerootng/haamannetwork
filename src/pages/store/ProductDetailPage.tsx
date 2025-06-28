@@ -143,7 +143,7 @@ const ProductDetailPage: React.FC = () => {
         reference: `ORD-${order.id.slice(0, 8)}`,
         details: {
           order_id: order.id,
-          product_name: product.name,
+          product_name: product.name, // Ensure product name is included
           quantity: quantity,
           payment_method: paymentMethod,
         },

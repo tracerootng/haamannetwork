@@ -21,6 +21,7 @@ import LoginPage from './pages/auth/LoginPage';
 import SignupPage from './pages/auth/SignupPage';
 import ResetPasswordPage from './pages/auth/ResetPasswordPage';
 import ComingSoonPage from './pages/ComingSoonPage';
+import SupportPage from './pages/support/SupportPage';
 
 // Admin Pages
 import AdminLoginPage from './pages/admin/AdminLoginPage';
@@ -34,6 +35,7 @@ import OrdersManagement from './pages/admin/OrdersManagement';
 import WalletManagement from './pages/admin/WalletManagement';
 import DataPlansManagement from './pages/admin/DataPlansManagement';
 import VirtualAccountManagement from './pages/admin/VirtualAccountManagement';
+import SupportTicketsManagement from './pages/admin/SupportTicketsManagement';
 
 import { useAuthStore } from './store/authStore';
 
@@ -71,6 +73,7 @@ function App() {
         <Route path="/admin/settings" element={<AdminSettings />} />
         <Route path="/admin/data-plans" element={<DataPlansManagement />} />
         <Route path="/admin/virtual-accounts" element={<VirtualAccountManagement />} />
+        <Route path="/admin/support-tickets" element={<SupportTicketsManagement />} />
 
         {/* Coming Soon Route */}
         <Route path="/coming-soon" element={<ComingSoonPage />} />
@@ -98,6 +101,7 @@ function App() {
           <Route path="transactions" element={<TransactionsPage />} />
           <Route path="refer" element={<ReferEarnPage />} />
           <Route path="profile" element={<ProfilePage />} />
+          <Route path="support" element={<SupportPage />} />
         </Route>
       </Routes>
     </Router>

@@ -125,3 +125,26 @@ export type ReferralReward = {
   status: 'pending' | 'claimed' | 'processed';
   created_at: string;
 };
+
+export type SupportTicket = {
+  id: string;
+  user_id: string;
+  subject: string;
+  category: 'transaction' | 'order' | 'referral' | 'general' | 'technical';
+  status: 'open' | 'pending_user_reply' | 'pending_admin_reply' | 'closed';
+  priority: 'low' | 'medium' | 'high' | 'critical';
+  created_at: string;
+  updated_at: string;
+  last_message_at: string;
+  assigned_to?: string;
+};
+
+export type TicketMessage = {
+  id: string;
+  ticket_id: string;
+  sender_id: string;
+  message: string;
+  is_admin_reply: boolean;
+  created_at: string;
+  sender_name?: string;
+};

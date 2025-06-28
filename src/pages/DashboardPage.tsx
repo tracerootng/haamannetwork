@@ -17,7 +17,8 @@ import {
   BookOpen,
   Moon,
   Sun,
-  Package
+  Package,
+  MessageCircle
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import Card from '../components/ui/Card';
@@ -108,10 +109,8 @@ const DashboardPage: React.FC = () => {
     {
       title: 'Ticket',
       icon: <Ticket size={20} />,
-      path: '/ticket',
+      path: '/support',
       color: 'bg-green-100 text-green-600',
-      comingSoon: true,
-      description: 'Create and manage support tickets for quick assistance from our team'
     },
     {
       title: 'Refer & Earn',
@@ -323,7 +322,7 @@ const DashboardPage: React.FC = () => {
         </div>
 
         {/* Quick Actions */}
-        <div className="mt-8 grid grid-cols-3 gap-3 sm:gap-4">
+        <div className="mt-8 grid grid-cols-4 gap-3 sm:gap-4">
           <Card 
             className="p-3 sm:p-4 bg-white dark:bg-gray-800 cursor-pointer hover:shadow-md transition-shadow"
             onClick={() => navigate('/store')}
@@ -368,6 +367,21 @@ const DashboardPage: React.FC = () => {
               <div className="text-center">
                 <p className="font-medium text-gray-900 dark:text-white text-xs sm:text-sm">Orders</p>
                 <p className="text-xs text-gray-600 dark:text-gray-400">Track orders</p>
+              </div>
+            </div>
+          </Card>
+
+          <Card 
+            className="p-3 sm:p-4 bg-white dark:bg-gray-800 cursor-pointer hover:shadow-md transition-shadow"
+            onClick={() => navigate('/support')}
+          >
+            <div className="flex flex-col items-center space-y-2 sm:space-y-3">
+              <div className="w-8 sm:w-10 h-8 sm:h-10 bg-orange-100 rounded-full flex items-center justify-center">
+                <MessageCircle size={16} className="text-orange-600" />
+              </div>
+              <div className="text-center">
+                <p className="font-medium text-gray-900 dark:text-white text-xs sm:text-sm">Support</p>
+                <p className="text-xs text-gray-600 dark:text-gray-400">Get help</p>
               </div>
             </div>
           </Card>
