@@ -225,37 +225,33 @@ const AdminSettings: React.FC = () => {
       }
     ];
 
-    for (const setting of requiredSettings) {
-      const { data, error } = await supabase
+    try {
+      // Use upsert to insert or update settings without causing conflicts
+      const { error } = await supabase
         .from('admin_settings')
-        .select('id')
-        .eq('key', setting.key)
-        .maybeSingle();
-
-      if (error) {
-        console.error(`Error checking for setting ${setting.key}:`, error);
-        continue;
-      }
-
-      if (!data) {
-        // Setting doesn't exist, create it
-        const { error: insertError } = await supabase
-          .from('admin_settings')
-          .insert([{
+        .upsert(
+          requiredSettings.map(setting => ({
             key: setting.key,
             value: setting.value,
             description: setting.description,
             updated_by: user?.id
-          }]);
+          })),
+          { 
+            onConflict: 'key',
+            ignoreDuplicates: false 
+          }
+        );
 
-        if (insertError) {
-          console.error(`Error creating setting ${setting.key}:`, insertError);
-        }
+      if (error) {
+        console.error('Error upserting settings:', error);
+        return;
       }
-    }
 
-    // Refresh settings after ensuring they exist
-    fetchSettings();
+      // Refresh settings after ensuring they exist
+      fetchSettings();
+    } catch (error) {
+      console.error('Error in ensureRequiredSettings:', error);
+    }
   };
 
   useEffect(() => {
