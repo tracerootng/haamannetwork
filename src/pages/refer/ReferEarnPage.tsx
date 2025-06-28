@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Copy, Share2, Users, Gift, TrendingUp, Award, ArrowLeft, CheckCircle, User, AlertCircle, Wifi, Phone, CreditCard } from 'lucide-react';
+import { Copy, Share2, Users, Gift, TrendingUp, Award, ArrowLeft, CheckCircle, User, AlertCircle, Wifi, Phone, CreditCard, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { formatCurrency } from '../../lib/utils';
 import { supabase } from '../../lib/supabase';
@@ -42,6 +42,12 @@ const ReferEarnPage: React.FC = () => {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [successModalMessage, setSuccessModalMessage] = useState('');
   
+  // Pagination for referrals
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalReferrals, setTotalReferrals] = useState(0);
+  const itemsPerPage = 5;
+  
   // Get referral code from user
   const referralCode = user ? user.referralCode : 'HN-XXXXXXXX';
   const referralLink = `https://haamannetwork.com/signup?ref=${referralCode}`;
@@ -58,12 +64,24 @@ const ReferEarnPage: React.FC = () => {
     
     setLoading(true);
     try {
-      // Get users who were referred by the current user
+      // Get total count first for pagination
+      const { count, error: countError } = await supabase
+        .from('profiles')
+        .select('id', { count: 'exact', head: true })
+        .eq('referred_by', user.id);
+      
+      if (countError) throw countError;
+      
+      setTotalReferrals(count || 0);
+      setTotalPages(Math.ceil((count || 0) / itemsPerPage));
+      
+      // Get users who were referred by the current user with pagination
       const { data, error } = await supabase
         .from('profiles')
         .select('id, name, email, created_at')
         .eq('referred_by', user.id)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .range((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage - 1);
       
       if (error) throw error;
       setReferrals(data || []);
@@ -90,7 +108,8 @@ const ReferEarnPage: React.FC = () => {
           'referral_reward_data_size',
           'referral_reward_type',
           'referral_reward_airtime_amount',
-          'referral_reward_cash_amount'
+          'referral_reward_cash_amount',
+          'referral_invite_limit'
         ]);
       
       if (settingsError) {
@@ -269,17 +288,21 @@ const ReferEarnPage: React.FC = () => {
       // Update user's wallet balance
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
-        .select('wallet_balance')
+        .select('wallet_balance, referral_earnings')
         .eq('id', user.id)
         .single();
         
       if (profileError) throw profileError;
       
       const newBalance = profile.wallet_balance + rewardAmount;
+      const newReferralEarnings = (profile.referral_earnings || 0) + rewardAmount;
       
       const { error: updateError } = await supabase
         .from('profiles')
-        .update({ wallet_balance: newBalance })
+        .update({ 
+          wallet_balance: newBalance,
+          referral_earnings: newReferralEarnings
+        })
         .eq('id', user.id);
         
       if (updateError) throw updateError;
@@ -413,6 +436,18 @@ const ReferEarnPage: React.FC = () => {
     const remainingReferrals = referralStats.requiredReferrals - (user?.totalReferrals || 0);
     return `Refer ${remainingReferrals} more friend${remainingReferrals !== 1 ? 's' : ''}`;
   };
+
+  // Handle pagination
+  const handlePageChange = (newPage: number) => {
+    setCurrentPage(newPage);
+  };
+
+  // Effect to refetch referrals when page changes
+  useEffect(() => {
+    if (user) {
+      fetchReferrals();
+    }
+  }, [currentPage]);
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -764,6 +799,82 @@ const ReferEarnPage: React.FC = () => {
                   </div>
                 </Card>
               ))}
+              
+              {/* Pagination Controls */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between mt-4">
+                  <div className="text-sm text-gray-600 dark:text-gray-400">
+                    Showing {(currentPage - 1) * itemsPerPage + 1}-{Math.min(currentPage * itemsPerPage, totalReferrals)} of {totalReferrals}
+                  </div>
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={() => handlePageChange(currentPage - 1)}
+                      disabled={currentPage === 1}
+                      className="p-2 rounded-lg border border-gray-300 dark:border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <ChevronLeft size={16} />
+                    </button>
+                    
+                    {/* Page numbers */}
+                    <div className="flex space-x-1">
+                      {Array.from({ length: Math.min(totalPages, 3) }, (_, i) => {
+                        // Show first page, current page, and last page
+                        let pageToShow: number;
+                        if (totalPages <= 3) {
+                          // If 3 or fewer pages, show all
+                          pageToShow = i + 1;
+                        } else if (currentPage === 1 || currentPage === 2) {
+                          // If on first or second page, show 1, 2, 3
+                          pageToShow = i + 1;
+                        } else if (currentPage === totalPages || currentPage === totalPages - 1) {
+                          // If on last or second-to-last page, show last 3 pages
+                          pageToShow = totalPages - 2 + i;
+                        } else {
+                          // Otherwise show current page and neighbors
+                          pageToShow = currentPage - 1 + i;
+                        }
+                        
+                        return (
+                          <button
+                            key={pageToShow}
+                            onClick={() => handlePageChange(pageToShow)}
+                            className={`w-8 h-8 flex items-center justify-center rounded-lg ${
+                              currentPage === pageToShow
+                                ? 'bg-[#0F9D58] text-white'
+                                : 'border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300'
+                            }`}
+                          >
+                            {pageToShow}
+                          </button>
+                        );
+                      })}
+                      
+                      {/* Show ellipsis if needed */}
+                      {totalPages > 3 && currentPage < totalPages - 1 && (
+                        <span className="w-8 h-8 flex items-center justify-center">...</span>
+                      )}
+                      
+                      {/* Always show last page if there are more than 3 pages and we're not near the end */}
+                      {totalPages > 3 && currentPage < totalPages - 1 && (
+                        <button
+                          onClick={() => handlePageChange(totalPages)}
+                          className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300"
+                        >
+                          {totalPages}
+                        </button>
+                      )}
+                    </div>
+                    
+                    <button
+                      onClick={() => handlePageChange(currentPage + 1)}
+                      disabled={currentPage === totalPages}
+                      className="p-2 rounded-lg border border-gray-300 dark:border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <ChevronRight size={16} />
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <div className="text-center py-8">

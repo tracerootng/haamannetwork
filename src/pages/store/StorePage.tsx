@@ -76,7 +76,7 @@ const StorePage: React.FC = () => {
     <div className="bg-gray-50 dark:bg-gray-900 min-h-screen">
       {/* Header */}
       <div className="bg-white dark:bg-gray-800 px-4 py-4 border-b border-gray-200 dark:border-gray-700 w-full">
-        <div className="flex justify-between items-center mb-4 max-w-[350px] mx-auto">
+        <div className="flex justify-between items-center mb-4 container-pad">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Shop</h1>
           
           <div className="relative">
@@ -95,7 +95,7 @@ const StorePage: React.FC = () => {
         </div>
         
         {/* Search Bar */}
-        <div className="relative mb-4 max-w-[350px] mx-auto">
+        <div className="relative mb-4 container-pad">
           <div className="relative w-full">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
             <input
@@ -116,7 +116,7 @@ const StorePage: React.FC = () => {
 
         {/* Filters */}
         {showFilters && (
-          <div className="space-y-4 mb-4 p-4 bg-gray-50 dark:bg-gray-700 rounded-xl max-w-[350px] mx-auto">
+          <div className="space-y-4 mb-4 p-4 bg-gray-50 dark:bg-gray-700 rounded-xl container-pad">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Sort by
@@ -137,7 +137,7 @@ const StorePage: React.FC = () => {
         )}
       </div>
 
-      <div className="p-4 space-y-6 max-w-[350px] mx-auto">
+      <div className="p-4 space-y-6 container-pad">
         {/* Categories */}
         <div className="mb-2">
           <div className="flex justify-between items-center mb-2">
@@ -177,7 +177,7 @@ const StorePage: React.FC = () => {
               <span className="text-sm text-[#0F9D58] font-medium">Limited Time</span>
             </div>
             
-            <div className="grid grid-cols-1 gap-4 mb-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-8">
               {featuredProducts.map((product) => (
                 <div key={product.id} className="relative w-full">
                   <ProductCard product={product} />
@@ -209,7 +209,7 @@ const StorePage: React.FC = () => {
           </div>
           
           {filteredProducts.length > 0 ? (
-            <div className="grid grid-cols-1 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {filteredProducts.map((product) => (
                 <div key={product.id} className="relative w-full">
                   <ProductCard product={product} />
