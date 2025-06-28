@@ -20,7 +20,7 @@ export type User = {
 export type Transaction = {
   id: string;
   userId: string;
-  type: 'airtime' | 'data' | 'electricity' | 'waec' | 'wallet_funding' | 'product_purchase' | 'referral_bonus';
+  type: 'airtime' | 'data' | 'electricity' | 'waec' | 'wallet_funding' | 'product_purchase' | 'referral_bonus' | 'referral_reward';
   amount: number;
   status: 'success' | 'pending' | 'failed';
   reference: string;
@@ -111,4 +111,17 @@ export type VirtualAccount = {
   bankName: string;
   accountNumber: string;
   reference: string;
+};
+
+export type ReferralReward = {
+  id: string;
+  user_id: string;
+  reward_type: 'data_bundle' | 'airtime' | 'wallet_credit';
+  reward_details: {
+    data_size?: string;
+    network?: string;
+    amount?: number;
+  };
+  status: 'pending' | 'claimed' | 'processed';
+  created_at: string;
 };

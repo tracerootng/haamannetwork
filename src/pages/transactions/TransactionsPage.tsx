@@ -72,6 +72,7 @@ const transactionTypes = [
   { value: 'electricity', label: 'Electricity' },
   { value: 'waec', label: 'WAEC' },
   { value: 'product_purchase', label: 'Product Purchase' },
+  { value: 'referral_reward', label: 'Referral Reward' },
 ];
 
 const statusOptions = [

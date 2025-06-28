@@ -9,12 +9,10 @@ import {
   Mail,
   Phone,
   Shield,
-  DollarSign,
-  AlertTriangle,
-  Image,
-  Type,
-  Upload,
+  Clock,
+  Gift,
   Download,
+  QrCode,
   Smartphone,
   MapPin,
   Building,
@@ -24,7 +22,6 @@ import {
   CreditCard,
   Lock,
   Users,
-  Gift,
   ToggleLeft,
   ToggleRight
 } from 'lucide-react';

@@ -198,20 +198,58 @@ const ReferEarnPage: React.FC = () => {
     setClaimingReward(true);
     
     try {
+      // Find a matching data plan to determine the value
+      const { data: dataPlans, error: plansError } = await supabase
+        .from('data_plans')
+        .select('*')
+        .eq('network', 'MTN')
+        .eq('is_active', true)
+        .ilike('size', referralStats.rewardDataSize)
+        .order('selling_price', { ascending: true })
+        .limit(1);
+        
+      if (plansError) throw plansError;
+      
+      if (!dataPlans || dataPlans.length === 0) {
+        throw new Error(`No matching data plan found for size ${referralStats.rewardDataSize}`);
+      }
+      
+      const dataPlan = dataPlans[0];
+      const rewardAmount = dataPlan.selling_price;
+      
+      // Update user's wallet balance
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('wallet_balance')
+        .eq('id', user.id)
+        .single();
+        
+      if (profileError) throw profileError;
+      
+      const newBalance = profile.wallet_balance + rewardAmount;
+      
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ wallet_balance: newBalance })
+        .eq('id', user.id);
+        
+      if (updateError) throw updateError;
+      
       // Create a transaction for the data reward
       const { error: transactionError } = await supabase
         .from('transactions')
         .insert([{
           user_id: user.id,
           type: 'referral_reward',
-          amount: 0, // No monetary value
+          amount: rewardAmount,
           status: 'success',
           reference: `REF-REWARD-${Date.now()}`,
           details: {
             reward_type: 'data_bundle',
             data_size: referralStats.rewardDataSize,
             network: 'MTN',
-            phone: user.phone || '',
+            plan_id: dataPlan.id,
+            plan_name: dataPlan.description || `${dataPlan.size} Data`,
             note: `Reward for referring ${referralStats.requiredReferrals} users`
           }
         }]);
@@ -226,7 +264,9 @@ const ReferEarnPage: React.FC = () => {
           reward_type: 'data_bundle',
           reward_details: {
             data_size: referralStats.rewardDataSize,
-            network: 'MTN'
+            network: 'MTN',
+            amount: rewardAmount,
+            plan_id: dataPlan.id
           },
           status: 'claimed'
         }]);
@@ -239,8 +279,11 @@ const ReferEarnPage: React.FC = () => {
         dataRewardClaimed: true
       }));
       
+      // Update the auth store with the new wallet balance
+      await useAuthStore.getState().refreshUserData();
+      
       // Show success message
-      alert(`Congratulations! Your ${referralStats.rewardDataSize} data reward has been claimed successfully. It will be credited to your registered phone number within 24 hours.`);
+      alert(`Congratulations! Your ${referralStats.rewardDataSize} data reward (${formatCurrency(rewardAmount)}) has been credited to your wallet. You can now use it to purchase data.`);
       
     } catch (error) {
       console.error('Error claiming data reward:', error);
