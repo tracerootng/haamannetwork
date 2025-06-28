@@ -144,8 +144,59 @@ serve(async (req) => {
       throw new Error("Email mismatch in transaction");
     }
 
+    // Get funding charge settings
+    const { data: chargeSettings, error: chargeError } = await supabase
+      .from("admin_settings")
+      .select("key, value")
+      .in("key", [
+        "funding_charge_enabled",
+        "funding_charge_type",
+        "funding_charge_value",
+        "funding_charge_min_deposit",
+        "funding_charge_max_deposit"
+      ]);
+
+    if (chargeError) {
+      console.error("Error fetching charge settings:", chargeError);
+      // Continue without charges if settings can't be fetched
+    }
+
+    // Process funding charges if enabled
+    let chargeAmount = 0;
+    let originalAmount = parseFloat(amount);
+    let amountToCredit = originalAmount;
+    
+    if (chargeSettings && chargeSettings.length > 0) {
+      const settings: Record<string, string> = {};
+      chargeSettings.forEach(setting => {
+        settings[setting.key] = setting.value;
+      });
+
+      const chargesEnabled = settings.funding_charge_enabled === 'true';
+      const chargeType = settings.funding_charge_type || 'percentage';
+      const chargeValue = parseFloat(settings.funding_charge_value || '0');
+      const minDeposit = parseFloat(settings.funding_charge_min_deposit || '0');
+      const maxDeposit = parseFloat(settings.funding_charge_max_deposit || '0');
+
+      // Apply charges if enabled and amount is within range
+      if (chargesEnabled && chargeValue > 0 && 
+          (minDeposit === 0 || originalAmount >= minDeposit) &&
+          (maxDeposit === 0 || originalAmount <= maxDeposit)) {
+        
+        if (chargeType === 'percentage') {
+          chargeAmount = originalAmount * (chargeValue / 100);
+        } else { // fixed
+          chargeAmount = chargeValue;
+        }
+
+        // Ensure charge doesn't exceed the deposit amount
+        chargeAmount = Math.min(chargeAmount, originalAmount);
+        amountToCredit = originalAmount - chargeAmount;
+      }
+    }
+
     // Update user's wallet balance
-    const newBalance = parseFloat(userProfile.wallet_balance) + parseFloat(amount);
+    const newBalance = parseFloat(userProfile.wallet_balance) + amountToCredit;
     
     const { error: updateError } = await supabase
       .from("profiles")
@@ -161,7 +212,7 @@ serve(async (req) => {
     const transactionData = {
       user_id: userProfile.id,
       type: "wallet_funding",
-      amount: parseFloat(amount),
+      amount: originalAmount,
       status: "success",
       reference: `FLW-${flw_ref || tx_ref}`, // Use Flutterwave's transaction reference for the incoming payment
       flutterwave_tx_ref: flw_ref, // Store the unique flw_ref for idempotency checks
@@ -169,6 +220,13 @@ serve(async (req) => {
         payment_method: "bank_transfer",
         currency,
         flutterwave_data: payload.data,
+        service_charge: chargeAmount > 0 ? {
+          amount: chargeAmount,
+          type: chargeSettings?.find(s => s.key === 'funding_charge_type')?.value || 'percentage',
+          value: parseFloat(chargeSettings?.find(s => s.key === 'funding_charge_value')?.value || '0'),
+          original_amount: originalAmount,
+          credited_amount: amountToCredit
+        } : null
       },
     };
 
@@ -187,11 +245,12 @@ serve(async (req) => {
       action: "wallet_funding_webhook",
       details: { 
         user_id: userProfile.id,
-        amount,
+        amount: originalAmount,
         tx_ref,
         flw_ref,
         previous_balance: userProfile.wallet_balance,
         new_balance: newBalance,
+        service_charge: chargeAmount > 0 ? chargeAmount : null
       },
     }]);
 

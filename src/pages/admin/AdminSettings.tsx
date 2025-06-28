@@ -22,7 +22,8 @@ import {
   Lock,
   Users,
   ToggleLeft,
-  ToggleRight
+  ToggleRight,
+  DollarSign
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../store/authStore';
@@ -128,6 +129,36 @@ const AdminSettings: React.FC = () => {
         key: 'referral_reward_cash_amount',
         value: '1000',
         description: 'Amount of cash to reward (in local currency)'
+      },
+      {
+        key: 'funding_charge_enabled',
+        value: 'false',
+        description: 'Enable or disable charges for wallet funding'
+      },
+      {
+        key: 'funding_charge_type',
+        value: 'percentage',
+        description: 'Type of charge for wallet funding (percentage or fixed)'
+      },
+      {
+        key: 'funding_charge_value',
+        value: '1.5',
+        description: 'Value of the charge (percentage or fixed amount)'
+      },
+      {
+        key: 'funding_charge_min_deposit',
+        value: '1000',
+        description: 'Minimum deposit amount for charges to apply (0 for no minimum)'
+      },
+      {
+        key: 'funding_charge_max_deposit',
+        value: '0',
+        description: 'Maximum deposit amount for charges to apply (0 for no maximum)'
+      },
+      {
+        key: 'funding_charge_display_text',
+        value: 'A service charge applies to wallet funding transactions.',
+        description: 'Custom text to display to users about funding charges'
       }
     ];
 
@@ -236,6 +267,18 @@ const AdminSettings: React.FC = () => {
         return <Phone className="text-green-500" size={20} />;
       case 'referral_reward_cash_amount':
         return <CreditCard className="text-green-500" size={20} />;
+      case 'funding_charge_enabled':
+        return <ToggleRight className="text-blue-500" size={20} />;
+      case 'funding_charge_type':
+        return <CreditCard className="text-blue-500" size={20} />;
+      case 'funding_charge_value':
+        return <Percent className="text-blue-500" size={20} />;
+      case 'funding_charge_min_deposit':
+        return <DollarSign className="text-blue-500" size={20} />;
+      case 'funding_charge_max_deposit':
+        return <DollarSign className="text-blue-500" size={20} />;
+      case 'funding_charge_display_text':
+        return <Mail className="text-blue-500" size={20} />;
       case 'site_name':
         return <Globe className="text-blue-500" size={20} />;
       case 'support_email':
@@ -286,6 +329,7 @@ const AdminSettings: React.FC = () => {
     'Homepage Content': ['hero_title', 'hero_subtitle', 'steps_title'],
     'Download App': ['download_app_enabled', 'download_app_url'],
     'Referral System': ['referral_bonus_percentage', 'referral_reward_enabled', 'referral_reward_count', 'referral_reward_type', 'referral_reward_data_size', 'referral_reward_airtime_amount', 'referral_reward_cash_amount'],
+    'Funding Charges': ['funding_charge_enabled', 'funding_charge_type', 'funding_charge_value', 'funding_charge_min_deposit', 'funding_charge_max_deposit', 'funding_charge_display_text'],
     'Transaction Limits': ['min_transaction_amount', 'max_transaction_amount', 'max_wallet_balance'],
     'System': ['maintenance_mode'],
   };
@@ -300,6 +344,13 @@ const AdminSettings: React.FC = () => {
     }
     if (key === 'referral_reward_cash_amount') {
       return formData['referral_reward_type'] === 'wallet_credit';
+    }
+    if (key === 'funding_charge_type' || 
+        key === 'funding_charge_value' || 
+        key === 'funding_charge_min_deposit' || 
+        key === 'funding_charge_max_deposit' || 
+        key === 'funding_charge_display_text') {
+      return formData['funding_charge_enabled'] === 'true';
     }
     return true;
   };
@@ -365,6 +416,11 @@ const AdminSettings: React.FC = () => {
                     Configure referral bonus percentages and data rewards for user referrals
                   </p>
                 )}
+                {category === 'Funding Charges' && (
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                    Configure charges applied to wallet funding transactions
+                  </p>
+                )}
               </div>
               
               <div className="p-6 space-y-6">
@@ -388,7 +444,8 @@ const AdminSettings: React.FC = () => {
                         
                         {setting.key === 'maintenance_mode' || 
                           setting.key === 'download_app_enabled' || 
-                          setting.key === 'referral_reward_enabled' ? (
+                          setting.key === 'referral_reward_enabled' ||
+                          setting.key === 'funding_charge_enabled' ? (
                           <select
                             value={formData[key] || setting.value}
                             onChange={(e) => handleChange(key, e.target.value)}
@@ -406,6 +463,15 @@ const AdminSettings: React.FC = () => {
                             <option value="data_bundle">Data Bundle</option>
                             <option value="airtime">Airtime</option>
                             <option value="wallet_credit">Wallet Credit</option>
+                          </select>
+                        ) : setting.key === 'funding_charge_type' ? (
+                          <select
+                            value={formData[key] || setting.value}
+                            onChange={(e) => handleChange(key, e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0F9D58]"
+                          >
+                            <option value="percentage">Percentage</option>
+                            <option value="fixed">Fixed Amount</option>
                           </select>
                         ) : setting.key === 'maskawa_token' || setting.key === 'flutterwave_encryption_key' ? (
                           <div className="relative">
@@ -462,11 +528,11 @@ const AdminSettings: React.FC = () => {
                               </div>
                             )}
                           </div>
-                        ) : setting.key.includes('title') || setting.key.includes('subtitle') || setting.key.includes('address') ? (
+                        ) : setting.key.includes('title') || setting.key.includes('subtitle') || setting.key.includes('address') || setting.key === 'funding_charge_display_text' ? (
                           <textarea
                             value={formData[key] || setting.value}
                             onChange={(e) => handleChange(key, e.target.value)}
-                            rows={setting.key.includes('subtitle') || setting.key.includes('address') ? 3 : 2}
+                            rows={setting.key.includes('subtitle') || setting.key.includes('address') || setting.key === 'funding_charge_display_text' ? 3 : 2}
                             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0F9D58]"
                           />
                         ) : setting.key.includes('url') ? (
@@ -477,14 +543,14 @@ const AdminSettings: React.FC = () => {
                             placeholder="Enter URL"
                             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0F9D58]"
                           />
-                        ) : setting.key.includes('percentage') || setting.key.includes('amount') || setting.key.includes('balance') || setting.key === 'referral_reward_count' ? (
+                        ) : setting.key.includes('percentage') || setting.key.includes('amount') || setting.key.includes('balance') || setting.key === 'referral_reward_count' || setting.key === 'funding_charge_value' || setting.key === 'funding_charge_min_deposit' || setting.key === 'funding_charge_max_deposit' ? (
                           <input
                             type="number"
                             value={formData[key] || setting.value}
                             onChange={(e) => handleChange(key, e.target.value)}
                             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0F9D58]"
                             min="0"
-                            step={setting.key.includes('percentage') ? '0.1' : '1'}
+                            step={setting.key.includes('percentage') || setting.key === 'funding_charge_value' && formData['funding_charge_type'] === 'percentage' ? '0.1' : '1'}
                           />
                         ) : setting.key.includes('email') ? (
                           <input
@@ -566,6 +632,44 @@ const AdminSettings: React.FC = () => {
                         {setting.key === 'referral_reward_cash_amount' && (
                           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                             Amount of cash to credit to user's wallet
+                          </p>
+                        )}
+
+                        {setting.key === 'funding_charge_enabled' && (
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            Enable or disable service charges for wallet funding
+                          </p>
+                        )}
+
+                        {setting.key === 'funding_charge_type' && (
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            Choose between percentage-based or fixed amount charges
+                          </p>
+                        )}
+
+                        {setting.key === 'funding_charge_value' && (
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            {formData['funding_charge_type'] === 'percentage' 
+                              ? 'Percentage value (e.g., 1.5 for 1.5%)' 
+                              : 'Fixed amount in local currency'}
+                          </p>
+                        )}
+
+                        {setting.key === 'funding_charge_min_deposit' && (
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            Minimum deposit amount for charges to apply (0 for no minimum)
+                          </p>
+                        )}
+
+                        {setting.key === 'funding_charge_max_deposit' && (
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            Maximum deposit amount for charges to apply (0 for no maximum)
+                          </p>
+                        )}
+
+                        {setting.key === 'funding_charge_display_text' && (
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            Custom message to display to users about funding charges
                           </p>
                         )}
                       </div>
