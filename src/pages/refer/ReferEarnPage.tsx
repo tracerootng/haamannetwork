@@ -342,8 +342,12 @@ const ReferEarnPage: React.FC = () => {
         dataRewardClaimed: true
       }));
       
-      // Update the auth store with the new wallet balance
-      await useAuthStore.getState().refreshUserData();
+      // Update the auth store with the new wallet balance and referral earnings
+      const authStore = useAuthStore.getState();
+      authStore.updateUser({
+        walletBalance: newBalance,
+        referralEarnings: newReferralEarnings
+      });
       
       // Show success message based on reward type
       let successMessage = '';

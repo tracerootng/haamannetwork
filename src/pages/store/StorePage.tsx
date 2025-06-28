@@ -82,7 +82,7 @@ const StorePage: React.FC = () => {
           <div className="relative">
             <button 
               onClick={() => navigate('/store/cart')}
-              className="relative p-2 bg-[#0F9D58] text-white rounded-full hover:bg-[#0d8a4f] transition-colors"
+              className="relative p-2 bg-[#0F9D58] text-white rounded-full hover:bg-[#0d8a4f] transition-colors flex items-center justify-center"
             >
               <ShoppingBag size={20} />
               {getTotalItems() > 0 && (

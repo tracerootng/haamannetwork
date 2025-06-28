@@ -69,7 +69,7 @@ const Header: React.FC<HeaderProps> = ({ toggleDarkMode, isDarkMode }) => {
 
             <button
               onClick={toggleDarkMode}
-              className="p-2 text-white hover:text-gray-200"
+              className="p-2 text-white hover:text-gray-200 bg-white/20 rounded-full flex items-center justify-center"
             >
               {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
             </button>
@@ -169,7 +169,7 @@ const Header: React.FC<HeaderProps> = ({ toggleDarkMode, isDarkMode }) => {
           
           <button
             onClick={toggleDarkMode}
-            className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
+            className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center justify-center"
           >
             {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
           </button>
