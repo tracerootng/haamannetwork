@@ -299,6 +299,11 @@ const SignupPage: React.FC = () => {
                   type="text"
                   value={formData.referralCode}
                   onChange={handleChange}
+                  onBlur={() => {
+                    if (formData.referralCode && !codeVerified) {
+                      verifyReferralCode(formData.referralCode);
+                    }
+                  }}
                   className={`w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0F9D58] focus:border-transparent transition-all duration-200 ${
                     errors.referralCode ? 'border-red-300' : codeVerified ? 'border-green-300' : 'border-gray-300'
                   }`}

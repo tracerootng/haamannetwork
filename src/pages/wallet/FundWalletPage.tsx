@@ -23,6 +23,7 @@ const FundWalletPage: React.FC = () => {
   const [amount, setAmount] = useState('');
   const [calculatedCharge, setCalculatedCharge] = useState(0);
   const [amountToReceive, setAmountToReceive] = useState(0);
+  const [loadingCharges, setLoadingCharges] = useState(false);
 
   useEffect(() => {
     if (user && !user.virtualAccountNumber) {
@@ -32,6 +33,7 @@ const FundWalletPage: React.FC = () => {
   }, [user, refreshUserData]);
 
   const fetchFundingCharges = async () => {
+    setLoadingCharges(true);
     try {
       const { data, error } = await supabase
         .from('admin_settings')
@@ -62,6 +64,8 @@ const FundWalletPage: React.FC = () => {
       });
     } catch (error) {
       console.error('Error fetching funding charges:', error);
+    } finally {
+      setLoadingCharges(false);
     }
   };
 
@@ -199,7 +203,11 @@ const FundWalletPage: React.FC = () => {
               </div>
 
               {/* Funding Charges Info */}
-              {fundingCharges.enabled && (
+              {loadingCharges ? (
+                <div className="flex justify-center py-4">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#0F9D58]"></div>
+                </div>
+              ) : fundingCharges.enabled && (
                 <div className="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border border-gray-200 dark:border-gray-700 mb-4">
                   <div className="flex items-start mb-4">
                     <Info className="text-[#0F9D58] mr-3 flex-shrink-0 mt-1" size={20} />

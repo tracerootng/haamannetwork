@@ -20,6 +20,7 @@ const ReferEarnPage: React.FC = () => {
   const [copied, setCopied] = useState(false);
   const [referrals, setReferrals] = useState<Referral[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingRewardStats, setLoadingRewardStats] = useState(false);
   const [referralStats, setReferralStats] = useState({
     totalReferrals: 0,
     referralEarnings: 0,
@@ -74,6 +75,7 @@ const ReferEarnPage: React.FC = () => {
   const fetchReferralStats = async () => {
     if (!user) return;
     
+    setLoadingRewardStats(true);
     try {
       // Get referral settings from admin settings
       const { data: settingsData, error: settingsError } = await supabase
@@ -129,6 +131,8 @@ const ReferEarnPage: React.FC = () => {
       }
     } catch (error) {
       console.error('Error fetching referral stats:', error);
+    } finally {
+      setLoadingRewardStats(false);
     }
   };
 
@@ -469,73 +473,81 @@ const ReferEarnPage: React.FC = () => {
         {/* Reward Card */}
         {referralStats.rewardEnabled && (
           <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 border border-gray-200 dark:border-gray-700">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center">
-                {referralStats.rewardType === 'data_bundle' && <Wifi className="text-[#0F9D58] mr-2" size={20} />}
-                {referralStats.rewardType === 'airtime' && <Phone className="text-[#0F9D58] mr-2" size={20} />}
-                {referralStats.rewardType === 'wallet_credit' && <CreditCard className="text-[#0F9D58] mr-2" size={20} />}
-                {referralStats.rewardType === 'data_bundle' ? 'Data Reward' : 
-                 referralStats.rewardType === 'airtime' ? 'Airtime Reward' : 'Cash Reward'}
-              </h3>
-              <div className={`px-2 py-1 rounded-full text-xs font-bold ${
-                referralStats.dataRewardClaimed 
-                  ? 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400' 
-                  : referralStats.dataRewardEligible 
-                  ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400'
-                  : 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-400'
-              }`}>
-                {referralStats.dataRewardClaimed 
-                  ? 'Claimed' 
-                  : referralStats.dataRewardEligible 
-                  ? 'Ready to Claim' 
-                  : 'In Progress'}
+            {loadingRewardStats ? (
+              <div className="flex justify-center items-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#0F9D58]"></div>
               </div>
-            </div>
-            
-            <div className="bg-gray-50 dark:bg-gray-700 rounded-xl p-4 mb-3">
-              <div className="flex justify-between items-center mb-2">
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Refer {referralStats.requiredReferrals} friends
-                </span>
-                <span className="text-sm font-bold text-[#0F9D58]">
-                  {referralStats.totalReferrals}/{referralStats.requiredReferrals} completed
-                </span>
-              </div>
-              
-              <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2.5 mb-3">
-                <div 
-                  className="h-2.5 rounded-full bg-[#0F9D58]"
-                  style={{ width: `${Math.min(100, (referralStats.totalReferrals / referralStats.requiredReferrals) * 100)}%` }}
-                ></div>
-              </div>
-              
-              <div className="flex items-center">
-                <div className="w-8 h-8 bg-[#0F9D58]/10 rounded-full flex items-center justify-center mr-3">
-                  {getRewardIcon()}
+            ) : (
+              <>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center">
+                    {referralStats.rewardType === 'data_bundle' && <Wifi className="text-[#0F9D58] mr-2" size={20} />}
+                    {referralStats.rewardType === 'airtime' && <Phone className="text-[#0F9D58] mr-2" size={20} />}
+                    {referralStats.rewardType === 'wallet_credit' && <CreditCard className="text-[#0F9D58] mr-2" size={20} />}
+                    {referralStats.rewardType === 'data_bundle' ? 'Data Reward' : 
+                     referralStats.rewardType === 'airtime' ? 'Airtime Reward' : 'Cash Reward'}
+                  </h3>
+                  <div className={`px-2 py-1 rounded-full text-xs font-bold ${
+                    referralStats.dataRewardClaimed 
+                      ? 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400' 
+                      : referralStats.dataRewardEligible 
+                      ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400'
+                      : 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-400'
+                  }`}>
+                    {referralStats.dataRewardClaimed 
+                      ? 'Claimed' 
+                      : referralStats.dataRewardEligible 
+                      ? 'Ready to Claim' 
+                      : 'In Progress'}
+                  </div>
                 </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">
-                    {getRewardDescription()}
-                  </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    {getRewardDetailsText()}
-                  </p>
+                
+                <div className="bg-gray-50 dark:bg-gray-700 rounded-xl p-4 mb-3">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Refer {referralStats.requiredReferrals} friends
+                    </span>
+                    <span className="text-sm font-bold text-[#0F9D58]">
+                      {referralStats.totalReferrals}/{referralStats.requiredReferrals} completed
+                    </span>
+                  </div>
+                  
+                  <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2.5 mb-3">
+                    <div 
+                      className="h-2.5 rounded-full bg-[#0F9D58]"
+                      style={{ width: `${Math.min(100, (referralStats.totalReferrals / referralStats.requiredReferrals) * 100)}%` }}
+                    ></div>
+                  </div>
+                  
+                  <div className="flex items-center">
+                    <div className="w-8 h-8 bg-[#0F9D58]/10 rounded-full flex items-center justify-center mr-3">
+                      {getRewardIcon()}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-900 dark:text-white">
+                        {getRewardDescription()}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {getRewardDetailsText()}
+                      </p>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
-            
-            <Button
-              onClick={claimReferralReward}
-              disabled={!referralStats.dataRewardEligible || referralStats.dataRewardClaimed || claimingReward}
-              className={`w-full ${
-                referralStats.dataRewardEligible && !referralStats.dataRewardClaimed
-                  ? 'bg-[#0F9D58] hover:bg-[#0d8a4f] text-white'
-                  : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
-              }`}
-              isLoading={claimingReward}
-            >
-              {getClaimButtonText()}
-            </Button>
+                
+                <Button
+                  onClick={claimReferralReward}
+                  disabled={!referralStats.dataRewardEligible || referralStats.dataRewardClaimed || claimingReward}
+                  className={`w-full ${
+                    referralStats.dataRewardEligible && !referralStats.dataRewardClaimed
+                      ? 'bg-[#0F9D58] hover:bg-[#0d8a4f] text-white'
+                      : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+                  }`}
+                  isLoading={claimingReward}
+                >
+                  {getClaimButtonText()}
+                </Button>
+              </>
+            )}
           </div>
         )}
 
