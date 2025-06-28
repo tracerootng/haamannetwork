@@ -22,8 +22,7 @@ const ReferEarnPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [loadingRewardStats, setLoadingRewardStats] = useState(false);
   const [referralStats, setReferralStats] = useState({
-    totalReferrals: 0,
-    referralEarnings: 0,
+    // Remove totalReferrals and referralEarnings from here as they'll come from user object
     bonusPercentage: 6,
     dataRewardEligible: false,
     dataRewardClaimed: false,
@@ -49,7 +48,7 @@ const ReferEarnPage: React.FC = () => {
       fetchReferrals();
       fetchReferralStats();
     }
-  }, [user?.id]); // Only depend on user.id to prevent infinite loops
+  }, [user?.id, user?.totalReferrals, user?.referralEarnings]); // Add dependencies to re-fetch when these values change
 
   const fetchReferrals = async () => {
     if (!user) return;
@@ -111,12 +110,12 @@ const ReferEarnPage: React.FC = () => {
           console.error('Error fetching reward status:', rewardError);
         }
         
+        // Use user.totalReferrals directly from the authStore
         const totalReferrals = user.totalReferrals || 0;
         const requiredReferrals = parseInt(settings.referral_reward_count || '5');
         
-        const updatedStats = {
-          totalReferrals: totalReferrals,
-          referralEarnings: user.referralEarnings || 0,
+        // Update referral stats
+        setReferralStats({
           bonusPercentage: parseFloat(settings.referral_bonus_percentage || '6'),
           dataRewardEligible: totalReferrals >= requiredReferrals,
           dataRewardClaimed: !!rewardData,
@@ -126,9 +125,7 @@ const ReferEarnPage: React.FC = () => {
           rewardType: settings.referral_reward_type || 'data_bundle',
           airtimeAmount: parseInt(settings.referral_reward_airtime_amount || '1000'),
           cashAmount: parseInt(settings.referral_reward_cash_amount || '1000')
-        };
-        
-        setReferralStats(updatedStats);
+        });
       }
     } catch (error) {
       console.error('Error fetching referral stats:', error);
@@ -407,7 +404,9 @@ const ReferEarnPage: React.FC = () => {
       }
     }
     
-    return `Refer ${referralStats.requiredReferrals - referralStats.totalReferrals} more friend${referralStats.requiredReferrals - referralStats.totalReferrals !== 1 ? 's' : ''}`;
+    // Calculate remaining referrals needed
+    const remainingReferrals = referralStats.requiredReferrals - (user?.totalReferrals || 0);
+    return `Refer ${remainingReferrals} more friend${remainingReferrals !== 1 ? 's' : ''}`;
   };
 
   return (
@@ -458,7 +457,7 @@ const ReferEarnPage: React.FC = () => {
             <div className="w-12 h-12 bg-[#0F9D58]/10 rounded-full flex items-center justify-center mx-auto mb-3">
               <Users size={24} className="text-[#0F9D58]" />
             </div>
-            <div className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white mb-1">{referralStats.totalReferrals}</div>
+            <div className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white mb-1">{user?.totalReferrals || 0}</div>
             <div className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">Total Referrals</div>
           </div>
           
@@ -466,7 +465,7 @@ const ReferEarnPage: React.FC = () => {
             <div className="w-12 h-12 bg-[#0F9D58]/10 rounded-full flex items-center justify-center mx-auto mb-3">
               <Award size={24} className="text-[#0F9D58]" />
             </div>
-            <div className="text-lg sm:text-2xl font-bold text-[#0F9D58] mb-1">{formatCurrency(referralStats.referralEarnings)}</div>
+            <div className="text-lg sm:text-2xl font-bold text-[#0F9D58] mb-1">{formatCurrency(user?.referralEarnings || 0)}</div>
             <div className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">Total Earned</div>
           </div>
         </div>
@@ -509,14 +508,14 @@ const ReferEarnPage: React.FC = () => {
                       Refer {referralStats.requiredReferrals} friends
                     </span>
                     <span className="text-sm font-bold text-[#0F9D58]">
-                      {referralStats.totalReferrals}/{referralStats.requiredReferrals} completed
+                      {user?.totalReferrals || 0}/{referralStats.requiredReferrals} completed
                     </span>
                   </div>
                   
                   <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2.5 mb-3">
                     <div 
                       className="h-2.5 rounded-full bg-[#0F9D58]"
-                      style={{ width: `${Math.min(100, (referralStats.totalReferrals / referralStats.requiredReferrals) * 100)}%` }}
+                      style={{ width: `${Math.min(100, ((user?.totalReferrals || 0) / referralStats.requiredReferrals) * 100)}%` }}
                     ></div>
                   </div>
                   
