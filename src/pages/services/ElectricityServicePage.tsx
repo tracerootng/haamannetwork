@@ -8,6 +8,7 @@ import { serviceAPI } from '../../lib/serviceApi';
 import { formatCurrency } from '../../lib/utils';
 import { jsPDF } from 'jspdf';
 import TransactionPinModal from '../../components/ui/TransactionPinModal';
+import SetPinModal from '../../components/ui/SetPinModal';
 
 const discos = [
   { value: 'ikeja', label: 'Ikeja Electric' },
@@ -43,6 +44,7 @@ const ElectricityServicePage: React.FC = () => {
   const [transaction, setTransaction] = useState<any>(null);
   const [errorMessage, setErrorMessage] = useState('');
   const [showPinModal, setShowPinModal] = useState(false);
+  const [showSetPinModal, setShowSetPinModal] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -53,6 +55,13 @@ const ElectricityServicePage: React.FC = () => {
     if (!formData.disco || !formData.meterType || !formData.meterNumber || !formData.amount) {
       return;
     }
+    
+    // Check if user has PIN set
+    if (user && !user.hasPin) {
+      setShowSetPinModal(true);
+      return;
+    }
+    
     setStep(2);
   };
 
@@ -456,6 +465,13 @@ const ElectricityServicePage: React.FC = () => {
         isOpen={showPinModal}
         onClose={() => setShowPinModal(false)}
         onSuccess={processPayment}
+      />
+
+      {/* Set PIN Modal */}
+      <SetPinModal
+        isOpen={showSetPinModal}
+        onClose={() => setShowSetPinModal(false)}
+        onSuccess={() => setStep(2)}
       />
     </>
   );

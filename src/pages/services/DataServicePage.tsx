@@ -10,6 +10,7 @@ import { serviceAPI } from '../../lib/serviceApi';
 import { formatCurrency } from '../../lib/utils';
 import { jsPDF } from 'jspdf';
 import TransactionPinModal from '../../components/ui/TransactionPinModal';
+import SetPinModal from '../../components/ui/SetPinModal';
 
 type Beneficiary = {
   id: string;
@@ -90,6 +91,7 @@ const DataServicePage: React.FC = () => {
   const [transaction, setTransaction] = useState<any>(null);
   const [errorMessage, setErrorMessage] = useState('');
   const [showPinModal, setShowPinModal] = useState(false);
+  const [showSetPinModal, setShowSetPinModal] = useState(false);
   
   // Data plans state
   const [dataPlans, setDataPlans] = useState<DataPlan[]>([]);
@@ -235,6 +237,13 @@ const DataServicePage: React.FC = () => {
     if (!selectedNetwork || !selectedPlan || !phoneNumber) {
       return;
     }
+    
+    // Check if user has PIN set
+    if (user && !user.hasPin) {
+      setShowSetPinModal(true);
+      return;
+    }
+    
     setStep(2);
   };
 
@@ -951,9 +960,7 @@ const DataServicePage: React.FC = () => {
         {isSuccess ? (
           <>
             <div className="w-16 h-16 bg-[#0F9D58]/10 rounded-full flex items-center justify-center mx-auto mb-4">
-              <svg className="w-8 h-8 text-[#0F9D58]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
+              <CheckCircle className="text-[#0F9D58]" size={32} />
             </div>
             
             <h2 className="text-xl font-semibold mb-2 text-gray-900 dark:text-white">Purchase Successful!</h2>
@@ -1032,9 +1039,7 @@ const DataServicePage: React.FC = () => {
         ) : (
           <>
             <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
-              <svg className="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
+              <XCircle className="text-red-500" size={32} />
             </div>
             
             <h2 className="text-xl font-semibold mb-2 text-gray-900 dark:text-white">Purchase Failed</h2>
@@ -1074,6 +1079,13 @@ const DataServicePage: React.FC = () => {
         isOpen={showPinModal}
         onClose={() => setShowPinModal(false)}
         onSuccess={processPayment}
+      />
+
+      {/* Set PIN Modal */}
+      <SetPinModal
+        isOpen={showSetPinModal}
+        onClose={() => setShowSetPinModal(false)}
+        onSuccess={() => setStep(2)}
       />
     </>
   );

@@ -21,6 +21,7 @@ import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import { formatCurrency } from '../../lib/utils';
 import TransactionPinModal from '../../components/ui/TransactionPinModal';
+import SetPinModal from '../../components/ui/SetPinModal';
 
 type Product = {
   id: string;
@@ -59,6 +60,7 @@ const ProductDetailPage: React.FC = () => {
   });
   const [isProcessing, setIsProcessing] = useState(false);
   const [showPinModal, setShowPinModal] = useState(false);
+  const [showSetPinModal, setShowSetPinModal] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -96,6 +98,13 @@ const ProductDetailPage: React.FC = () => {
       navigate('/login');
       return;
     }
+    
+    // Check if user has PIN set and is using wallet payment
+    if (user && !user.hasPin) {
+      setShowSetPinModal(true);
+      return;
+    }
+    
     setShowCheckoutModal(true);
   };
 
@@ -546,6 +555,13 @@ const ProductDetailPage: React.FC = () => {
         isOpen={showPinModal}
         onClose={() => setShowPinModal(false)}
         onSuccess={processCheckout}
+      />
+
+      {/* Set PIN Modal */}
+      <SetPinModal
+        isOpen={showSetPinModal}
+        onClose={() => setShowSetPinModal(false)}
+        onSuccess={() => setShowCheckoutModal(true)}
       />
     </div>
   );

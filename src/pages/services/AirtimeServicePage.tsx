@@ -8,6 +8,7 @@ import { serviceAPI } from '../../lib/serviceApi';
 import { formatCurrency } from '../../lib/utils';
 import { supabase } from '../../lib/supabase';
 import TransactionPinModal from '../../components/ui/TransactionPinModal';
+import SetPinModal from '../../components/ui/SetPinModal';
 
 type Beneficiary = {
   id: string;
@@ -64,6 +65,7 @@ const AirtimeServicePage: React.FC = () => {
   const [showBeneficiaries, setShowBeneficiaries] = useState(false);
   const [loadingBeneficiaries, setLoadingBeneficiaries] = useState(false);
   const [showPinModal, setShowPinModal] = useState(false);
+  const [showSetPinModal, setShowSetPinModal] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -134,6 +136,13 @@ const AirtimeServicePage: React.FC = () => {
     if (!selectedNetwork || !phoneNumber || !amount) {
       return;
     }
+    
+    // Check if user has PIN set
+    if (user && !user.hasPin) {
+      setShowSetPinModal(true);
+      return;
+    }
+    
     setStep(2);
   };
 
@@ -745,6 +754,13 @@ const AirtimeServicePage: React.FC = () => {
         isOpen={showPinModal}
         onClose={() => setShowPinModal(false)}
         onSuccess={processPayment}
+      />
+
+      {/* Set PIN Modal */}
+      <SetPinModal
+        isOpen={showSetPinModal}
+        onClose={() => setShowSetPinModal(false)}
+        onSuccess={() => setStep(2)}
       />
     </>
   );
