@@ -443,8 +443,12 @@ export const useAuthStore = create<AuthState>()(
 
       refreshUserData: async () => {
         const state = get();
-        if (!state.user) return;
+        if (!state.user) {
+          console.log("refreshUserData: No user to refresh");
+          return;
+        }
 
+        console.log("refreshUserData: Refreshing data for user", state.user.id);
         try {
           const { data: profile, error } = await supabase
             .from('profiles')
@@ -452,9 +456,19 @@ export const useAuthStore = create<AuthState>()(
             .eq('id', state.user.id)
             .single();
 
-          if (error) throw error;
+          if (error) {
+            console.error("refreshUserData: Error fetching profile:", error);
+            throw error;
+          }
 
           if (profile) {
+            console.log("refreshUserData: Got updated profile data:", {
+              id: profile.id,
+              totalReferrals: profile.total_referrals,
+              referralEarnings: profile.referral_earnings,
+              walletBalance: profile.wallet_balance
+            });
+            
             set({
               user: {
                 id: profile.id,
@@ -474,6 +488,8 @@ export const useAuthStore = create<AuthState>()(
                 bvn: profile.bvn,
               },
             });
+            
+            console.log("refreshUserData: User state updated successfully");
           }
         } catch (error) {
           console.error('Error refreshing user data:', error);
@@ -575,6 +591,12 @@ export const useAuthStore = create<AuthState>()(
               get().initRealtimeSubscription();
             }
           } else if (profile) {
+            console.log("checkAuth: Found existing profile with data:", {
+              id: profile.id,
+              totalReferrals: profile.total_referrals,
+              referralEarnings: profile.referral_earnings
+            });
+            
             set({
               user: {
                 id: profile.id,
@@ -692,6 +714,35 @@ export const useAuthStore = create<AuthState>()(
                     user: state.user ? {
                       ...state.user,
                       walletBalance: payload.new.wallet_balance,
+                      // Also update referral stats if they've changed
+                      totalReferrals: payload.new.total_referrals !== undefined ? 
+                        payload.new.total_referrals : 
+                        state.user?.totalReferrals || 0,
+                      referralEarnings: payload.new.referral_earnings !== undefined ? 
+                        payload.new.referral_earnings : 
+                        state.user?.referralEarnings || 0,
+                    } : null,
+                  }));
+                }
+                
+                // Update referral stats specifically if they've changed
+                if (payload.new && 
+                   (payload.new.total_referrals !== undefined || 
+                    payload.new.referral_earnings !== undefined)) {
+                  console.log('Updating referral stats from realtime event:', {
+                    totalReferrals: payload.new.total_referrals,
+                    referralEarnings: payload.new.referral_earnings
+                  });
+                  
+                  set((state) => ({
+                    user: state.user ? {
+                      ...state.user,
+                      totalReferrals: payload.new.total_referrals !== undefined ? 
+                        payload.new.total_referrals : 
+                        state.user?.totalReferrals || 0,
+                      referralEarnings: payload.new.referral_earnings !== undefined ? 
+                        payload.new.referral_earnings : 
+                        state.user?.referralEarnings || 0,
                     } : null,
                   }));
                 }
