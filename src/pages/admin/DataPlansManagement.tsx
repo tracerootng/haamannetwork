@@ -18,7 +18,9 @@ import {
   AlertTriangle,
   Eye,
   EyeOff,
-  RefreshCw
+  RefreshCw,
+  ToggleLeft,
+  ToggleRight
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../store/authStore';
@@ -78,7 +80,7 @@ const DataPlansManagement: React.FC = () => {
     is_popular: false,
   });
 
-  const [categoryFormData, setCategoryFormData] = useState({
+  const [categoryFormData, setcategoryFormData] = useState({
     network: '',
     plan_type: '',
     display_name: '',
@@ -240,6 +242,17 @@ const DataPlansManagement: React.FC = () => {
 
       if (error) throw error;
 
+      // Log admin action
+      await supabase.from('admin_logs').insert([{
+        admin_id: user?.id,
+        action: plan.is_popular ? 'remove_popular_data_plan' : 'mark_popular_data_plan',
+        details: { 
+          plan_id: plan.id,
+          plan_name: plan.description,
+          network: plan.network,
+        },
+      }]);
+
       fetchDataPlans();
     } catch (error) {
       console.error('Error toggling popular status:', error);
@@ -351,28 +364,29 @@ const DataPlansManagement: React.FC = () => {
     }
   };
 
-  const handleEditCategory = (category: DataPlanCategory | null) => {
-    if (category) {
-      setEditingCategory(category);
-      setCategoryFormData({
-        network: category.network,
-        plan_type: category.plan_type,
-        display_name: category.display_name,
-        description: category.description || '',
-        is_active: category.is_active,
-        sort_order: category.sort_order,
-      });
-    } else {
-      setEditingCategory(null);
-      setCategoryFormData({
-        network: '',
-        plan_type: '',
-        display_name: '',
-        description: '',
-        is_active: true,
-        sort_order: 0,
-      });
-    }
+  const handleAddEditCategory = () => {
+    setEditingCategory(null);
+    setcategoryFormData({
+      network: '',
+      plan_type: '',
+      display_name: '',
+      description: '',
+      is_active: true,
+      sort_order: 0,
+    });
+    setShowCategoryModal(true);
+  };
+
+  const handleEditCategory = (category: DataPlanCategory) => {
+    setEditingCategory(category);
+    setcategoryFormData({
+      network: category.network,
+      plan_type: category.plan_type,
+      display_name: category.display_name,
+      description: category.description || '',
+      is_active: category.is_active,
+      sort_order: category.sort_order,
+    });
     setShowCategoryModal(true);
   };
 
@@ -405,7 +419,8 @@ const DataPlansManagement: React.FC = () => {
           action: 'update_data_plan_category',
           details: { 
             category_id: editingCategory.id,
-            category_name: categoryFormData.display_name,
+            network: categoryFormData.network,
+            plan_type: categoryFormData.plan_type,
           },
         }]);
       } else {
@@ -428,8 +443,8 @@ const DataPlansManagement: React.FC = () => {
           admin_id: user?.id,
           action: 'create_data_plan_category',
           details: { 
-            category_name: categoryFormData.display_name,
             network: categoryFormData.network,
+            plan_type: categoryFormData.plan_type,
           },
         }]);
       }
@@ -442,30 +457,30 @@ const DataPlansManagement: React.FC = () => {
     }
   };
 
-  const handleDeleteCategory = async (categoryId: string) => {
-    if (!confirm('Are you sure you want to delete this category? This may affect data plans using this category.')) {
-      return;
-    }
-
+  const handleToggleCategoryActive = async (category: DataPlanCategory) => {
     try {
       const { error } = await supabase
         .from('data_plan_categories')
-        .delete()
-        .eq('id', categoryId);
+        .update({ is_active: !category.is_active })
+        .eq('id', category.id);
 
       if (error) throw error;
 
       // Log admin action
       await supabase.from('admin_logs').insert([{
         admin_id: user?.id,
-        action: 'delete_data_plan_category',
-        details: { category_id: categoryId },
+        action: category.is_active ? 'deactivate_data_plan_category' : 'activate_data_plan_category',
+        details: { 
+          category_id: category.id,
+          network: category.network,
+          plan_type: category.plan_type,
+        },
       }]);
 
       fetchCategories();
     } catch (error) {
-      console.error('Error deleting category:', error);
-      alert('Error deleting category. Please try again.');
+      console.error('Error toggling category status:', error);
+      alert('Error updating category status. Please try again.');
     }
   };
 
@@ -484,14 +499,15 @@ const DataPlansManagement: React.FC = () => {
   const networks = ['all', ...Array.from(new Set(dataPlans.map(p => p.network)))];
   const planTypes = ['all', ...Array.from(new Set(dataPlans.map(p => p.plan_type)))];
 
-  // Group plans by category for better visualization
-  const plansByCategory: Record<string, DataPlan[]> = {};
+  // Group plans by category for better organization
+  const groupedPlans: Record<string, DataPlan[]> = {};
   
   filteredPlans.forEach(plan => {
-    if (!plansByCategory[plan.plan_type]) {
-      plansByCategory[plan.plan_type] = [];
+    const key = `${plan.network}-${plan.plan_type}`;
+    if (!groupedPlans[key]) {
+      groupedPlans[key] = [];
     }
-    plansByCategory[plan.plan_type].push(plan);
+    groupedPlans[key].push(plan);
   });
 
   if (loading) {
@@ -523,11 +539,11 @@ const DataPlansManagement: React.FC = () => {
             
             <div className="flex space-x-3">
               <button
-                onClick={() => handleEditCategory(null)}
+                onClick={() => handleAddEditCategory()}
                 className="flex items-center px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors"
               >
-                <Plus size={16} className="mr-2" />
-                Add Category
+                <Tag size={16} className="mr-2" />
+                Manage Categories
               </button>
               
               <button
@@ -586,102 +602,6 @@ const DataPlansManagement: React.FC = () => {
           </div>
         </div>
 
-        {/* Categories Section */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 mb-6 border border-gray-200 dark:border-gray-700">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
-            <Tag className="mr-2 text-[#0F9D58]" size={20} />
-            Data Plan Categories
-          </h2>
-          
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 dark:bg-gray-700">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Network
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Category ID
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Display Name
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Description
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                {categories.map((category) => (
-                  <tr key={category.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        category.network === 'MTN' ? 'bg-yellow-100 text-yellow-800' :
-                        category.network === 'AIRTEL' ? 'bg-red-100 text-red-800' :
-                        category.network === 'GLO' ? 'bg-green-100 text-green-800' :
-                        category.network === '9MOBILE' ? 'bg-teal-100 text-teal-800' :
-                        'bg-gray-100 text-gray-800'
-                      }`}>
-                        {category.network}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                      {category.plan_type}
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
-                      {category.display_name}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
-                      {category.description || 'No description'}
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                        category.is_active 
-                          ? 'bg-green-100 text-green-800' 
-                          : 'bg-red-100 text-red-800'
-                      }`}>
-                        {category.is_active ? 'Active' : 'Inactive'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm font-medium space-x-2">
-                      <button
-                        onClick={() => handleEditCategory(category)}
-                        className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
-                        title="Edit Category"
-                      >
-                        <Edit size={16} />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteCategory(category.id)}
-                        className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
-                        title="Delete Category"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          
-          {categories.length === 0 && (
-            <div className="text-center py-6">
-              <Tag className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No categories found</h3>
-              <p className="text-gray-600 dark:text-gray-400">
-                Start by adding your first data plan category
-              </p>
-            </div>
-          )}
-        </div>
-
         {/* Filters */}
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 mb-6 border border-gray-200 dark:border-gray-700">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -722,169 +642,144 @@ const DataPlansManagement: React.FC = () => {
           </div>
         </div>
 
-        {/* Data Plans Table */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-          {Object.keys(plansByCategory).length > 0 ? (
-            <div className="space-y-6 p-6">
-              {Object.entries(plansByCategory).map(([category, plans]) => {
-                const categoryInfo = categories.find(c => c.plan_type === category);
-                return (
-                  <div key={category} className="mb-8">
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
-                        <Tag className="mr-2 text-[#0F9D58]" size={18} />
-                        {categoryInfo?.display_name || category}
-                      </h3>
-                      <div className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        categoryInfo?.is_active 
-                          ? 'bg-green-100 text-green-800' 
-                          : 'bg-red-100 text-red-800'
-                      }`}>
-                        {plans.length} plans
-                      </div>
-                    </div>
-                    
-                    <div className="overflow-x-auto">
-                      <table className="w-full">
-                        <thead className="bg-gray-50 dark:bg-gray-700">
-                          <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                              Network
-                            </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                              Data Size
-                            </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                              Validity
-                            </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                              Cost Price
-                            </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                              Selling Price
-                            </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                              Profit
-                            </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                              Status
-                            </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                              Popular
-                            </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                              Actions
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                          {plans.map((plan) => (
-                            <tr key={plan.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="flex items-center">
-                                  <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                                    plan.network === 'MTN' ? 'bg-yellow-500' :
-                                    plan.network === 'AIRTEL' ? 'bg-red-500' :
-                                    plan.network === 'GLO' ? 'bg-green-500' :
-                                    'bg-teal-500'
-                                  }`}>
-                                    <span className="text-white font-bold text-xs">
-                                      {plan.network.charAt(0)}
-                                    </span>
-                                  </div>
-                                  <span className="ml-2 text-sm font-medium text-gray-900 dark:text-white">
-                                    {plan.network}
-                                  </span>
-                                </div>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
-                                {plan.size}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                {plan.validity}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                {formatCurrency(plan.cost_price)}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
-                                {formatCurrency(plan.selling_price)}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="flex flex-col">
-                                  <span className="text-sm font-medium text-[#0F9D58]">
-                                    {formatCurrency(plan.selling_price - plan.cost_price)}
-                                  </span>
-                                  <span className="text-xs text-gray-500 dark:text-gray-400">
-                                    ({plan.profit_margin}%)
-                                  </span>
-                                </div>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                                  plan.is_active 
-                                    ? 'bg-green-100 text-green-800' 
-                                    : 'bg-red-100 text-red-800'
-                                }`}>
-                                  {plan.is_active ? 'Active' : 'Inactive'}
-                                </span>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                                  plan.is_popular 
-                                    ? 'bg-yellow-100 text-yellow-800' 
-                                    : 'bg-gray-100 text-gray-800'
-                                }`}>
-                                  {plan.is_popular ? 'Popular' : 'Regular'}
-                                </span>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
-                                <button
-                                  onClick={() => handleEditPlan(plan)}
-                                  className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
-                                  title="Edit Plan"
-                                >
-                                  <Edit size={16} />
-                                </button>
-                                <button
-                                  onClick={() => handleToggleActive(plan)}
-                                  className={`${
-                                    plan.is_active 
-                                      ? 'text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300' 
-                                      : 'text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300'
-                                  }`}
-                                  title={plan.is_active ? 'Deactivate' : 'Activate'}
-                                >
-                                  {plan.is_active ? <EyeOff size={16} /> : <Eye size={16} />}
-                                </button>
-                                <button
-                                  onClick={() => handleTogglePopular(plan)}
-                                  className={`${
-                                    plan.is_popular 
-                                      ? 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-300' 
-                                      : 'text-yellow-600 hover:text-yellow-900 dark:text-yellow-400 dark:hover:text-yellow-300'
-                                  }`}
-                                  title={plan.is_popular ? 'Remove from Popular' : 'Mark as Popular'}
-                                >
-                                  <Star size={16} />
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+        {/* Data Plan Categories */}
+        {Object.keys(groupedPlans).length > 0 ? (
+          Object.entries(groupedPlans).map(([key, plans]) => {
+            const [network, planType] = key.split('-');
+            const category = categories.find(c => c.network === network && c.plan_type === planType);
+            
+            return (
+              <div key={key} className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden mb-6">
+                <div className="p-4 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600 flex justify-between items-center">
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                      {network} - {category?.display_name || planType}
+                    </h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      {plans.length} plans
+                    </p>
                   </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="text-center py-12">
-              <Database className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No data plans found</h3>
-              <p className="text-gray-600 dark:text-gray-400">Try adjusting your search or filter criteria</p>
-            </div>
-          )}
-        </div>
+                </div>
+                
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-gray-50 dark:bg-gray-700">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                          Data Size
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                          Validity
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                          Cost Price
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                          Selling Price
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                          Profit
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                          Status
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                          Popular
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                          Actions
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                      {plans.map((plan) => (
+                        <tr key={plan.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                            {plan.size}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                            {plan.validity}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                            {formatCurrency(plan.cost_price)}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                            {formatCurrency(plan.selling_price)}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex flex-col">
+                              <span className="text-sm font-medium text-[#0F9D58]">
+                                {formatCurrency(plan.selling_price - plan.cost_price)}
+                              </span>
+                              <span className="text-xs text-gray-500 dark:text-gray-400">
+                                ({plan.profit_margin}%)
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                              plan.is_active 
+                                ? 'bg-green-100 text-green-800' 
+                                : 'bg-red-100 text-red-800'
+                            }`}>
+                              {plan.is_active ? 'Active' : 'Inactive'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                              plan.is_popular 
+                                ? 'bg-yellow-100 text-yellow-800' 
+                                : 'bg-gray-100 text-gray-800'
+                            }`}>
+                              {plan.is_popular ? 'Popular' : 'Regular'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                            <button
+                              onClick={() => handleEditPlan(plan)}
+                              className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
+                              title="Edit Plan"
+                            >
+                              <Edit size={16} />
+                            </button>
+                            <button
+                              onClick={() => handleToggleActive(plan)}
+                              className={`${
+                                plan.is_active 
+                                  ? 'text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300' 
+                                  : 'text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300'
+                              }`}
+                              title={plan.is_active ? 'Deactivate' : 'Activate'}
+                            >
+                              {plan.is_active ? <EyeOff size={16} /> : <Eye size={16} />}
+                            </button>
+                            <button
+                              onClick={() => handleTogglePopular(plan)}
+                              className={`${
+                                plan.is_popular 
+                                  ? 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-300' 
+                                  : 'text-yellow-600 hover:text-yellow-900 dark:text-yellow-400 dark:hover:text-yellow-300'
+                              }`}
+                              title={plan.is_popular ? 'Remove from Popular' : 'Mark as Popular'}
+                            >
+                              <Star size={16} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          })
+        ) : (
+          <div className="text-center py-12">
+            <Database className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No data plans found</h3>
+            <p className="text-gray-600 dark:text-gray-400">Try adjusting your search or filter criteria</p>
+          </div>
+        )}
       </div>
 
       {/* Edit Plan Modal */}
@@ -1113,7 +1008,7 @@ const DataPlansManagement: React.FC = () => {
           <div className="bg-white dark:bg-gray-800 rounded-xl max-w-md w-full">
             <div className="p-6 border-b border-gray-200 dark:border-gray-700">
               <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-                {editingCategory ? 'Edit Category' : 'Add New Category'}
+                {editingCategory ? 'Edit Category' : 'Add Category'}
               </h2>
             </div>
             
@@ -1124,7 +1019,7 @@ const DataPlansManagement: React.FC = () => {
                 </label>
                 <select
                   value={categoryFormData.network}
-                  onChange={(e) => setCategoryFormData({...categoryFormData, network: e.target.value})}
+                  onChange={(e) => setcategoryFormData({...categoryFormData, network: e.target.value})}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0F9D58]"
                 >
                   <option value="">Select Network</option>
@@ -1137,17 +1032,17 @@ const DataPlansManagement: React.FC = () => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Category ID (Plan Type)
+                  Plan Type ID
                 </label>
                 <input
                   type="text"
                   value={categoryFormData.plan_type}
-                  onChange={(e) => setCategoryFormData({...categoryFormData, plan_type: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0F9D58]"
+                  onChange={(e) => setcategoryFormData({...categoryFormData, plan_type: e.target.value})}
                   placeholder="e.g., sme, corporate, gifting"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0F9D58]"
                 />
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  This is the internal identifier used in the database
+                  This is the internal ID used to group plans (e.g., sme, corporate)
                 </p>
               </div>
 
@@ -1158,12 +1053,12 @@ const DataPlansManagement: React.FC = () => {
                 <input
                   type="text"
                   value={categoryFormData.display_name}
-                  onChange={(e) => setCategoryFormData({...categoryFormData, display_name: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0F9D58]"
+                  onChange={(e) => setcategoryFormData({...categoryFormData, display_name: e.target.value})}
                   placeholder="e.g., SME Plans, Corporate Plans"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0F9D58]"
                 />
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  This is what users will see in the app
+                  This is the name shown to users in the app
                 </p>
               </div>
 
@@ -1173,10 +1068,10 @@ const DataPlansManagement: React.FC = () => {
                 </label>
                 <textarea
                   value={categoryFormData.description}
-                  onChange={(e) => setCategoryFormData({...categoryFormData, description: e.target.value})}
+                  onChange={(e) => setcategoryFormData({...categoryFormData, description: e.target.value})}
+                  placeholder="Optional description of this plan category"
                   rows={3}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0F9D58]"
-                  placeholder="Optional description of this category"
                 />
               </div>
 
@@ -1187,7 +1082,7 @@ const DataPlansManagement: React.FC = () => {
                 <input
                   type="number"
                   value={categoryFormData.sort_order}
-                  onChange={(e) => setCategoryFormData({...categoryFormData, sort_order: parseInt(e.target.value)})}
+                  onChange={(e) => setcategoryFormData({...categoryFormData, sort_order: parseInt(e.target.value)})}
                   min="0"
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0F9D58]"
                 />
@@ -1201,7 +1096,7 @@ const DataPlansManagement: React.FC = () => {
                   type="checkbox"
                   id="is_active"
                   checked={categoryFormData.is_active}
-                  onChange={(e) => setCategoryFormData({...categoryFormData, is_active: e.target.checked})}
+                  onChange={(e) => setcategoryFormData({...categoryFormData, is_active: e.target.checked})}
                   className="h-4 w-4 text-[#0F9D58] focus:ring-[#0F9D58] border-gray-300 rounded"
                 />
                 <label htmlFor="is_active" className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
@@ -1227,6 +1122,19 @@ const DataPlansManagement: React.FC = () => {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Categories Management Modal */}
+      {categories.length > 0 && (
+        <div className="fixed bottom-4 right-4">
+          <button
+            onClick={() => handleAddEditCategory()}
+            className="bg-[#0F9D58] text-white p-4 rounded-full shadow-lg hover:bg-[#0d8a4f] transition-colors"
+            title="Add Category"
+          >
+            <Plus size={24} />
+          </button>
         </div>
       )}
     </div>
