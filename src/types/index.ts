@@ -137,6 +137,11 @@ export type SupportTicket = {
   updated_at: string;
   last_message_at: string;
   assigned_to?: string;
+  profiles?: {
+    name: string;
+    email: string;
+    phone?: string;
+  };
 };
 
 export type TicketMessage = {
@@ -147,4 +152,7 @@ export type TicketMessage = {
   is_admin_reply: boolean;
   created_at: string;
   sender_name?: string;
+  profiles?: {
+    name: string;
+  };
 };
