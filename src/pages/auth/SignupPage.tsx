@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { Mail, Lock, User, Phone, Eye, EyeOff, AlertCircle, CheckCircle, Gift, CreditCard } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
+import { supabase } from '../../lib/supabase';
 
 const SignupPage: React.FC = () => {
   const navigate = useNavigate();
@@ -22,10 +23,13 @@ const SignupPage: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isVerifyingCode, setIsVerifyingCode] = useState(false);
+  const [codeVerified, setCodeVerified] = useState(false);
 
   useEffect(() => {
     if (referralCode) {
       setFormData(prev => ({ ...prev, referralCode }));
+      verifyReferralCode(referralCode);
     }
   }, [referralCode]);
 
@@ -35,6 +39,47 @@ const SignupPage: React.FC = () => {
     // Clear error when user starts typing
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: '' }));
+    }
+    
+    // Reset verification status when referral code changes
+    if (name === 'referralCode') {
+      setCodeVerified(false);
+    }
+  };
+
+  const verifyReferralCode = async (code: string) => {
+    if (!code.trim()) return;
+    
+    setIsVerifyingCode(true);
+    try {
+      // Check if the referral code exists in the database
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, name')
+        .eq('referral_code', code.trim())
+        .maybeSingle();
+      
+      if (error) throw error;
+      
+      setCodeVerified(!!data);
+      
+      if (!data) {
+        setErrors(prev => ({ 
+          ...prev, 
+          referralCode: 'Invalid referral code. Please check and try again.' 
+        }));
+      } else {
+        // Clear any previous error
+        setErrors(prev => ({ 
+          ...prev, 
+          referralCode: '' 
+        }));
+      }
+    } catch (error) {
+      console.error('Error verifying referral code:', error);
+      setCodeVerified(false);
+    } finally {
+      setIsVerifyingCode(false);
     }
   };
 
@@ -65,6 +110,11 @@ const SignupPage: React.FC = () => {
       newErrors.confirmPassword = 'Please confirm your password';
     } else if (formData.password !== formData.confirmPassword) {
       newErrors.confirmPassword = 'Passwords do not match';
+    }
+
+    // Validate referral code if provided
+    if (formData.referralCode && !codeVerified) {
+      newErrors.referralCode = 'Please verify the referral code first';
     }
 
     // Validate BVN if virtual account creation is selected
@@ -138,7 +188,7 @@ const SignupPage: React.FC = () => {
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-white py-8 px-6 shadow-xl rounded-2xl sm:px-10">
           {/* Referral Code Notice */}
-          {formData.referralCode && (
+          {formData.referralCode && codeVerified && (
             <div className="mb-6 p-4 bg-[#0F9D58]/10 border border-[#0F9D58]/20 rounded-xl flex items-start gap-3">
               <Gift className="text-[#0F9D58] mt-0.5 flex-shrink-0" size={20} />
               <div className="flex-1">
@@ -242,19 +292,36 @@ const SignupPage: React.FC = () => {
               <label htmlFor="referralCode" className="block text-sm font-medium text-gray-700 mb-2">
                 Referral Code <span className="text-gray-400">(Optional)</span>
               </label>
-              <input
-                id="referralCode"
-                name="referralCode"
-                type="text"
-                value={formData.referralCode}
-                onChange={handleChange}
-                className={`w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0F9D58] focus:border-transparent transition-all duration-200 ${
-                  errors.referralCode ? 'border-red-300' : 'border-gray-300'
-                }`}
-                placeholder="Enter referral code (if any)"
-              />
+              <div className="relative">
+                <input
+                  id="referralCode"
+                  name="referralCode"
+                  type="text"
+                  value={formData.referralCode}
+                  onChange={handleChange}
+                  className={`w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0F9D58] focus:border-transparent transition-all duration-200 ${
+                    errors.referralCode ? 'border-red-300' : codeVerified ? 'border-green-300' : 'border-gray-300'
+                  }`}
+                  placeholder="Enter referral code (if any)"
+                />
+                {codeVerified && (
+                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                    <CheckCircle className="text-green-500" size={20} />
+                  </div>
+                )}
+              </div>
               {errors.referralCode && (
                 <p className="mt-1 text-sm text-red-600">{errors.referralCode}</p>
+              )}
+              {formData.referralCode && !codeVerified && !errors.referralCode && (
+                <button
+                  type="button"
+                  onClick={() => verifyReferralCode(formData.referralCode)}
+                  className="mt-2 text-sm text-[#0F9D58] font-medium"
+                  disabled={isVerifyingCode}
+                >
+                  {isVerifyingCode ? 'Verifying...' : 'Verify Code'}
+                </button>
               )}
             </div>
 

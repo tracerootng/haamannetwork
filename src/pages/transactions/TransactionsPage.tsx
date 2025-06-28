@@ -114,6 +114,8 @@ const getTransactionLabel = (type: string, details: any) => {
       return `Wallet Funding (${details.method || details.payment_method || 'wallet'})`;
     case 'product_purchase':
       return `Product Purchase - ${details.product_name || 'Product'}`;
+    case 'referral_reward':
+      return `Referral Reward - ${details.reward_type || 'Bonus'}`;
     default:
       return 'Transaction';
   }
@@ -250,39 +252,52 @@ const TransactionsPage: React.FC = () => {
     
     setLoadingBeneficiaries(true);
     try {
-      // In a real implementation, we would fetch from a beneficiaries table
-      // For now, we'll create a query to extract beneficiaries from transaction history
-      const { data: transactionData, error } = await supabase
-        .from('transactions')
+      // Fetch beneficiaries from the database
+      const { data, error } = await supabase
+        .from('beneficiaries')
         .select('*')
         .eq('user_id', user.id)
-        .in('type', ['airtime', 'data'])
-        .eq('status', 'success')
         .order('created_at', { ascending: false });
         
-      if (error) throw error;
-      
-      // Extract unique beneficiaries from transaction history
-      const beneficiaryMap = new Map<string, Beneficiary>();
-      
-      transactionData?.forEach(transaction => {
-        const phone = transaction.details?.phone;
-        const network = transaction.details?.network;
+      if (error) {
+        // If there's an error, we'll use transaction history to extract beneficiaries
+        console.error('Error fetching beneficiaries:', error);
         
-        if (phone && network && !beneficiaryMap.has(phone)) {
-          beneficiaryMap.set(phone, {
-            id: transaction.id,
-            user_id: user.id,
-            name: `Beneficiary (${network})`,
-            phone_number: phone,
-            network: network,
-            type: transaction.type as 'airtime' | 'data',
-            created_at: transaction.created_at
-          });
-        }
-      });
-      
-      setBeneficiaries(Array.from(beneficiaryMap.values()));
+        // Get data and airtime transactions
+        const { data: transactionData, error: txError } = await supabase
+          .from('transactions')
+          .select('*')
+          .eq('user_id', user.id)
+          .in('type', ['airtime', 'data'])
+          .eq('status', 'success')
+          .order('created_at', { ascending: false });
+          
+        if (txError) throw txError;
+        
+        // Extract unique beneficiaries from transaction history
+        const beneficiaryMap = new Map<string, Beneficiary>();
+        
+        transactionData?.forEach(transaction => {
+          const phone = transaction.details?.phone;
+          const network = transaction.details?.network;
+          
+          if (phone && network && !beneficiaryMap.has(phone)) {
+            beneficiaryMap.set(phone, {
+              id: transaction.id,
+              user_id: user.id,
+              name: `Beneficiary (${network})`,
+              phone_number: phone,
+              network: network,
+              type: transaction.type as 'airtime' | 'data',
+              created_at: transaction.created_at
+            });
+          }
+        });
+        
+        setBeneficiaries(Array.from(beneficiaryMap.values()));
+      } else {
+        setBeneficiaries(data || []);
+      }
     } catch (error) {
       console.error('Error fetching beneficiaries:', error);
     } finally {
@@ -375,14 +390,15 @@ const TransactionsPage: React.FC = () => {
     
     setLoadingLeaderboard(true);
     try {
-      // Call the RPC function to get the leaderboard data
+      // Create a custom SQL query to get the leaderboard data
       const { data, error } = await supabase.rpc('get_data_usage_leaderboard', {
-        network_filter: selectedNetwork === 'all' ? null : selectedNetwork
+        network_filter: selectedNetwork === 'all' ? null : selectedNetwork,
+        current_user_id: user.id
       });
       
       if (error) throw error;
       
-      // Set the leaderboard data (should return top 10 users)
+      // Set the leaderboard data
       setLeaderboard(data || []);
     } catch (error) {
       console.error('Error fetching leaderboard:', error);
@@ -713,7 +729,13 @@ const TransactionsPage: React.FC = () => {
             <Select
               options={networkOptions}
               value={selectedNetwork}
-              onChange={(e) => setSelectedNetwork(e.target.value)}
+              onChange={(e) => {
+                setSelectedNetwork(e.target.value);
+                // Refresh leaderboard when network filter changes
+                if (showLeaderboard) {
+                  fetchLeaderboard();
+                }
+              }}
               className="w-40"
             />
           </div>
@@ -829,8 +851,8 @@ const TransactionsPage: React.FC = () => {
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#0F9D58]"></div>
             </div>
           ) : beneficiaries.length > 0 ? (
-            <div className="space-y-3 w-full">
-              <div className="overflow-x-auto w-full">
+            <div className="space-y-3">
+              <div className="overflow-x-auto">
                 {beneficiaries.map((beneficiary) => (
                   <div key={beneficiary.id} className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 flex items-center justify-between mb-3 w-full">
                     <div className="flex items-center">
