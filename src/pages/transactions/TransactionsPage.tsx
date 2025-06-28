@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ArrowUpRight, ArrowDownRight, Download, Search, Filter, BarChart2, Trophy, Users, Calendar, ChevronDown, ChevronUp, Crown } from 'lucide-react';
 import Card from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
@@ -178,6 +179,7 @@ const downloadReceipt = (transaction: any) => {
 };
 
 const TransactionsPage: React.FC = () => {
+  const navigate = useNavigate();
   const { user, isAuthenticated } = useAuthStore();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
@@ -544,7 +546,7 @@ const TransactionsPage: React.FC = () => {
           <p className="text-gray-600 dark:text-gray-400 mb-6 text-sm">
             Please login to view your transactions.
           </p>
-          <Button variant="primary" onClick={() => window.location.href = '/login'}>
+          <Button variant="primary" onClick={() => navigate('/login')}>
             Login
           </Button>
         </Card>
@@ -858,10 +860,10 @@ const TransactionsPage: React.FC = () => {
                   <div key={beneficiary.id} className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 flex items-center justify-between mb-3 w-full">
                     <div className="flex items-center">
                       <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                        beneficiary.network === 'mtn' ? 'bg-yellow-100 text-yellow-600' :
-                        beneficiary.network === 'airtel' ? 'bg-red-100 text-red-600' :
-                        beneficiary.network === 'glo' ? 'bg-green-100 text-green-600' :
-                        beneficiary.network === '9mobile' ? 'bg-teal-100 text-teal-600' :
+                        beneficiary.network.toLowerCase() === 'mtn' ? 'bg-yellow-100 text-yellow-600' :
+                        beneficiary.network.toLowerCase() === 'airtel' ? 'bg-red-100 text-red-600' :
+                        beneficiary.network.toLowerCase() === 'glo' ? 'bg-green-100 text-green-600' :
+                        beneficiary.network.toLowerCase() === '9mobile' ? 'bg-teal-100 text-teal-600' :
                         'bg-gray-100 text-gray-600'
                       }`}>
                         <Users size={18} />

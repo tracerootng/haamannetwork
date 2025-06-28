@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, User, Search, Filter, Star, Zap, Download, Info, Plus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { Zap, ArrowLeft, CheckCircle, XCircle, User, Search, Filter, Star, Download, Info, Plus } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
@@ -180,12 +180,14 @@ const DataServicePage: React.FC = () => {
           const network = transaction.details?.network;
           
           if (phone && network && !beneficiaryMap.has(phone)) {
+            // Ensure network is uppercase to match networkProviders
+            const formattedNetwork = network.toUpperCase();
             beneficiaryMap.set(phone, {
               id: transaction.id,
               user_id: user.id,
-              name: `Beneficiary (${network})`,
+              name: `Beneficiary (${formattedNetwork})`,
               phone_number: phone,
-              network: network.toUpperCase(),
+              network: formattedNetwork,
               type: 'data',
               created_at: transaction.created_at
             });

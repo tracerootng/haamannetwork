@@ -110,7 +110,7 @@ const AirtimeServicePage: React.FC = () => {
               user_id: user.id,
               name: `Beneficiary (${network})`,
               phone_number: phone,
-              network: network,
+              network: network.toLowerCase(), // Ensure network is lowercase to match networkProviders
               type: 'airtime',
               created_at: transaction.created_at
             });
