@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Copy, Share2, Users, Gift, TrendingUp, Award, ArrowLeft, CheckCircle, User, AlertCircle, Wifi } from 'lucide-react';
+import { Copy, Share2, Users, Gift, TrendingUp, Award, ArrowLeft, CheckCircle, User, AlertCircle, Wifi, Phone, CreditCard } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { formatCurrency } from '../../lib/utils';
 import { supabase } from '../../lib/supabase';
@@ -28,7 +28,10 @@ const ReferEarnPage: React.FC = () => {
     dataRewardClaimed: false,
     rewardEnabled: true,
     requiredReferrals: 5,
-    rewardDataSize: '1GB'
+    rewardDataSize: '1GB',
+    rewardType: 'data_bundle',
+    airtimeAmount: 1000,
+    cashAmount: 1000
   });
   const [referralCodeError, setReferralCodeError] = useState<string | null>(null);
   const [verifyCodeInput, setVerifyCodeInput] = useState('');
@@ -80,7 +83,10 @@ const ReferEarnPage: React.FC = () => {
           'referral_bonus_percentage', 
           'referral_reward_enabled', 
           'referral_reward_count', 
-          'referral_reward_data_size'
+          'referral_reward_data_size',
+          'referral_reward_type',
+          'referral_reward_airtime_amount',
+          'referral_reward_cash_amount'
         ]);
       
       if (settingsError) {
@@ -91,12 +97,12 @@ const ReferEarnPage: React.FC = () => {
           settings[setting.key] = setting.value;
         });
 
-        // Check if user has claimed the data reward
+        // Check if user has claimed the reward
         const { data: rewardData, error: rewardError } = await supabase
           .from('referral_rewards')
           .select('*')
           .eq('user_id', user.id)
-          .eq('reward_type', 'data_bundle')
+          .eq('reward_type', settings.referral_reward_type || 'data_bundle')
           .maybeSingle();
           
         if (rewardError) {
@@ -115,7 +121,10 @@ const ReferEarnPage: React.FC = () => {
           dataRewardClaimed: !!rewardData,
           rewardEnabled: settings.referral_reward_enabled === 'true',
           requiredReferrals: requiredReferrals,
-          rewardDataSize: settings.referral_reward_data_size || '1GB'
+          rewardDataSize: settings.referral_reward_data_size || '1GB',
+          rewardType: settings.referral_reward_type || 'data_bundle',
+          airtimeAmount: parseInt(settings.referral_reward_airtime_amount || '1000'),
+          cashAmount: parseInt(settings.referral_reward_cash_amount || '1000')
         }));
       }
     } catch (error) {
@@ -188,7 +197,7 @@ const ReferEarnPage: React.FC = () => {
     }
   };
   
-  const claimDataReward = async () => {
+  const claimReferralReward = async () => {
     if (!user) return;
     
     if (!referralStats.dataRewardEligible || referralStats.dataRewardClaimed || !referralStats.rewardEnabled) {
@@ -198,24 +207,59 @@ const ReferEarnPage: React.FC = () => {
     setClaimingReward(true);
     
     try {
-      // Find a matching data plan to determine the value
-      const { data: dataPlans, error: plansError } = await supabase
-        .from('data_plans')
-        .select('*')
-        .eq('network', 'MTN')
-        .eq('is_active', true)
-        .ilike('size', referralStats.rewardDataSize)
-        .order('selling_price', { ascending: true })
-        .limit(1);
-        
-      if (plansError) throw plansError;
+      let rewardAmount = 0;
+      let rewardDetails = {};
       
-      if (!dataPlans || dataPlans.length === 0) {
-        throw new Error(`No matching data plan found for size ${referralStats.rewardDataSize}`);
+      switch (referralStats.rewardType) {
+        case 'data_bundle':
+          // Find a matching data plan to determine the value
+          const { data: dataPlans, error: plansError } = await supabase
+            .from('data_plans')
+            .select('*')
+            .eq('network', 'MTN')
+            .eq('is_active', true)
+            .ilike('size', referralStats.rewardDataSize)
+            .order('selling_price', { ascending: true })
+            .limit(1);
+            
+          if (plansError) throw plansError;
+          
+          if (!dataPlans || dataPlans.length === 0) {
+            throw new Error(`No matching data plan found for size ${referralStats.rewardDataSize}`);
+          }
+          
+          const dataPlan = dataPlans[0];
+          rewardAmount = dataPlan.selling_price;
+          
+          rewardDetails = {
+            reward_type: 'data_bundle',
+            data_size: referralStats.rewardDataSize,
+            network: 'MTN',
+            plan_id: dataPlan.id,
+            plan_name: dataPlan.description || `${dataPlan.size} Data`
+          };
+          break;
+          
+        case 'airtime':
+          rewardAmount = referralStats.airtimeAmount;
+          rewardDetails = {
+            reward_type: 'airtime',
+            network: 'MTN',
+            amount: rewardAmount
+          };
+          break;
+          
+        case 'wallet_credit':
+          rewardAmount = referralStats.cashAmount;
+          rewardDetails = {
+            reward_type: 'wallet_credit',
+            amount: rewardAmount
+          };
+          break;
+          
+        default:
+          throw new Error(`Unknown reward type: ${referralStats.rewardType}`);
       }
-      
-      const dataPlan = dataPlans[0];
-      const rewardAmount = dataPlan.selling_price;
       
       // Update user's wallet balance
       const { data: profile, error: profileError } = await supabase
@@ -235,7 +279,7 @@ const ReferEarnPage: React.FC = () => {
         
       if (updateError) throw updateError;
       
-      // Create a transaction for the data reward
+      // Create a transaction for the reward
       const { error: transactionError } = await supabase
         .from('transactions')
         .insert([{
@@ -245,11 +289,7 @@ const ReferEarnPage: React.FC = () => {
           status: 'success',
           reference: `REF-REWARD-${Date.now()}`,
           details: {
-            reward_type: 'data_bundle',
-            data_size: referralStats.rewardDataSize,
-            network: 'MTN',
-            plan_id: dataPlan.id,
-            plan_name: dataPlan.description || `${dataPlan.size} Data`,
+            ...rewardDetails,
             note: `Reward for referring ${referralStats.requiredReferrals} users`
           }
         }]);
@@ -261,13 +301,8 @@ const ReferEarnPage: React.FC = () => {
         .from('referral_rewards')
         .insert([{
           user_id: user.id,
-          reward_type: 'data_bundle',
-          reward_details: {
-            data_size: referralStats.rewardDataSize,
-            network: 'MTN',
-            amount: rewardAmount,
-            plan_id: dataPlan.id
-          },
+          reward_type: referralStats.rewardType,
+          reward_details: rewardDetails,
           status: 'claimed'
         }]);
         
@@ -282,15 +317,92 @@ const ReferEarnPage: React.FC = () => {
       // Update the auth store with the new wallet balance
       await useAuthStore.getState().refreshUserData();
       
-      // Show success message
-      alert(`Congratulations! Your ${referralStats.rewardDataSize} data reward (${formatCurrency(rewardAmount)}) has been credited to your wallet. You can now use it to purchase data.`);
+      // Show success message based on reward type
+      let successMessage = '';
+      switch (referralStats.rewardType) {
+        case 'data_bundle':
+          successMessage = `Congratulations! Your ${referralStats.rewardDataSize} data reward (${formatCurrency(rewardAmount)}) has been credited to your wallet. You can now use it to purchase data.`;
+          break;
+        case 'airtime':
+          successMessage = `Congratulations! Your airtime reward of ${formatCurrency(rewardAmount)} has been credited to your wallet. You can now use it to purchase airtime.`;
+          break;
+        case 'wallet_credit':
+          successMessage = `Congratulations! Your cash reward of ${formatCurrency(rewardAmount)} has been credited to your wallet.`;
+          break;
+      }
+      
+      alert(successMessage);
       
     } catch (error) {
-      console.error('Error claiming data reward:', error);
+      console.error('Error claiming reward:', error);
       alert('Failed to claim reward. Please try again or contact support.');
     } finally {
       setClaimingReward(false);
     }
+  };
+
+  // Get the appropriate icon for the reward type
+  const getRewardIcon = () => {
+    switch (referralStats.rewardType) {
+      case 'data_bundle':
+        return <Wifi size={16} className="text-[#0F9D58]" />;
+      case 'airtime':
+        return <Phone size={16} className="text-[#0F9D58]" />;
+      case 'wallet_credit':
+        return <CreditCard size={16} className="text-[#0F9D58]" />;
+      default:
+        return <Gift size={16} className="text-[#0F9D58]" />;
+    }
+  };
+
+  // Get the reward description based on type
+  const getRewardDescription = () => {
+    switch (referralStats.rewardType) {
+      case 'data_bundle':
+        return `${referralStats.rewardDataSize} Data Bundle Reward`;
+      case 'airtime':
+        return `${formatCurrency(referralStats.airtimeAmount)} Airtime Reward`;
+      case 'wallet_credit':
+        return `${formatCurrency(referralStats.cashAmount)} Cash Reward`;
+      default:
+        return 'Referral Reward';
+    }
+  };
+
+  // Get the reward details text
+  const getRewardDetailsText = () => {
+    switch (referralStats.rewardType) {
+      case 'data_bundle':
+        return `Refer ${referralStats.requiredReferrals} friends and get ${referralStats.rewardDataSize} data bundle for free`;
+      case 'airtime':
+        return `Refer ${referralStats.requiredReferrals} friends and get ${formatCurrency(referralStats.airtimeAmount)} airtime for free`;
+      case 'wallet_credit':
+        return `Refer ${referralStats.requiredReferrals} friends and get ${formatCurrency(referralStats.cashAmount)} credited to your wallet`;
+      default:
+        return `Refer ${referralStats.requiredReferrals} friends to earn your reward`;
+    }
+  };
+
+  // Get the claim button text
+  const getClaimButtonText = () => {
+    if (referralStats.dataRewardClaimed) {
+      return 'Reward Claimed';
+    }
+    
+    if (referralStats.dataRewardEligible) {
+      switch (referralStats.rewardType) {
+        case 'data_bundle':
+          return `Claim ${referralStats.rewardDataSize} Data Reward`;
+        case 'airtime':
+          return `Claim ${formatCurrency(referralStats.airtimeAmount)} Airtime`;
+        case 'wallet_credit':
+          return `Claim ${formatCurrency(referralStats.cashAmount)} Cash Reward`;
+        default:
+          return 'Claim Reward';
+      }
+    }
+    
+    return `Refer ${referralStats.requiredReferrals - referralStats.totalReferrals} more friend${referralStats.requiredReferrals - referralStats.totalReferrals !== 1 ? 's' : ''}`;
   };
 
   return (
@@ -354,13 +466,16 @@ const ReferEarnPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Data Reward Card */}
+        {/* Reward Card */}
         {referralStats.rewardEnabled && (
           <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 border border-gray-200 dark:border-gray-700">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center">
-                <Wifi className="text-[#0F9D58] mr-2" size={20} />
-                Data Reward
+                {referralStats.rewardType === 'data_bundle' && <Wifi className="text-[#0F9D58] mr-2" size={20} />}
+                {referralStats.rewardType === 'airtime' && <Phone className="text-[#0F9D58] mr-2" size={20} />}
+                {referralStats.rewardType === 'wallet_credit' && <CreditCard className="text-[#0F9D58] mr-2" size={20} />}
+                {referralStats.rewardType === 'data_bundle' ? 'Data Reward' : 
+                 referralStats.rewardType === 'airtime' ? 'Airtime Reward' : 'Cash Reward'}
               </h3>
               <div className={`px-2 py-1 rounded-full text-xs font-bold ${
                 referralStats.dataRewardClaimed 
@@ -396,21 +511,21 @@ const ReferEarnPage: React.FC = () => {
               
               <div className="flex items-center">
                 <div className="w-8 h-8 bg-[#0F9D58]/10 rounded-full flex items-center justify-center mr-3">
-                  <Gift size={16} className="text-[#0F9D58]" />
+                  {getRewardIcon()}
                 </div>
                 <div>
                   <p className="text-sm font-medium text-gray-900 dark:text-white">
-                    {referralStats.rewardDataSize} Data Bundle Reward
+                    {getRewardDescription()}
                   </p>
                   <p className="text-xs text-gray-500 dark:text-gray-400">
-                    Refer {referralStats.requiredReferrals} friends and get {referralStats.rewardDataSize} data bundle for free
+                    {getRewardDetailsText()}
                   </p>
                 </div>
               </div>
             </div>
             
             <Button
-              onClick={claimDataReward}
+              onClick={claimReferralReward}
               disabled={!referralStats.dataRewardEligible || referralStats.dataRewardClaimed || claimingReward}
               className={`w-full ${
                 referralStats.dataRewardEligible && !referralStats.dataRewardClaimed
@@ -419,11 +534,7 @@ const ReferEarnPage: React.FC = () => {
               }`}
               isLoading={claimingReward}
             >
-              {referralStats.dataRewardClaimed 
-                ? 'Reward Claimed' 
-                : referralStats.dataRewardEligible 
-                ? `Claim ${referralStats.rewardDataSize} Data Reward` 
-                : `Refer ${referralStats.requiredReferrals - referralStats.totalReferrals} more friend${referralStats.requiredReferrals - referralStats.totalReferrals !== 1 ? 's' : ''}`}
+              {getClaimButtonText()}
             </Button>
           </div>
         )}
@@ -478,9 +589,14 @@ const ReferEarnPage: React.FC = () => {
                   4
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h4 className="font-semibold text-gray-900 dark:text-white text-sm">Earn special data rewards</h4>
+                  <h4 className="font-semibold text-gray-900 dark:text-white text-sm">Earn special rewards</h4>
                   <p className="text-xs text-gray-600 dark:text-gray-400">
-                    Refer {referralStats.requiredReferrals} friends and get a free {referralStats.rewardDataSize} data bundle
+                    {referralStats.rewardType === 'data_bundle' && 
+                      `Refer ${referralStats.requiredReferrals} friends and get a free ${referralStats.rewardDataSize} data bundle`}
+                    {referralStats.rewardType === 'airtime' && 
+                      `Refer ${referralStats.requiredReferrals} friends and get ${formatCurrency(referralStats.airtimeAmount)} airtime for free`}
+                    {referralStats.rewardType === 'wallet_credit' && 
+                      `Refer ${referralStats.requiredReferrals} friends and get ${formatCurrency(referralStats.cashAmount)} credited to your wallet`}
                   </p>
                 </div>
               </div>
@@ -656,7 +772,9 @@ const ReferEarnPage: React.FC = () => {
             <li>• Referred user must complete account verification</li>
             <li>• Self-referrals and fake accounts are strictly prohibited</li>
             {referralStats.rewardEnabled && (
-              <li>• Data reward ({referralStats.rewardDataSize}) is given after referring {referralStats.requiredReferrals} users</li>
+              <li>• {referralStats.rewardType === 'data_bundle' ? `Data reward (${referralStats.rewardDataSize})` : 
+                  referralStats.rewardType === 'airtime' ? `Airtime reward (${formatCurrency(referralStats.airtimeAmount)})` :
+                  `Cash reward (${formatCurrency(referralStats.cashAmount)})`} is given after referring {referralStats.requiredReferrals} users</li>
             )}
             <li>• Haaman Network reserves the right to modify terms at any time</li>
           </ul>
