@@ -760,7 +760,14 @@ const DataServicePage: React.FC = () => {
                       <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{plan.description}</p>
                     </div>
                     <div className="text-right ml-4">
-                      <p className="font-bold text-[#0F9D58]">{formatCurrency(plan.selling_price)}</p>
+                      <div className="flex flex-col items-end">
+                        {plan.show_discount_badge && plan.discount_percentage > 0 && (
+                          <span className="inline-flex px-2 py-1 text-xs font-bold rounded-full bg-red-500 text-white mb-1">
+                            -{plan.discount_percentage}% OFF
+                          </span>
+                        )}
+                        <p className="font-bold text-[#0F9D58]">{formatCurrency(plan.selling_price)}</p>
+                      </div>
                     </div>
                   </button>
                 ))}
