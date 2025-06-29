@@ -11,7 +11,8 @@ import {
   Plus,
   Minus,
   CreditCard,
-  Wallet
+  Wallet,
+  LogIn
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../store/authStore';
@@ -88,6 +89,12 @@ const ProductDetailPage: React.FC = () => {
 
   const handleAddToCart = () => {
     if (!product) return;
+    
+    if (!isAuthenticated) {
+      navigate('/login');
+      return;
+    }
+    
     addItem(product, quantity);
     // Show success message
     alert('Product added to cart!');
@@ -388,6 +395,18 @@ const ProductDetailPage: React.FC = () => {
                 </div>
               </div>
 
+              {/* Authentication Notice */}
+              {!isAuthenticated && (
+                <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                  <div className="flex items-center">
+                    <LogIn className="text-yellow-600 dark:text-yellow-400 mr-2 flex-shrink-0" size={20} />
+                    <p className="text-sm text-yellow-700 dark:text-yellow-300">
+                      Please <a href="/login" className="font-medium underline">login</a> to add items to cart or make purchases
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {/* Action Buttons */}
               <div className="grid grid-cols-2 gap-3">
                 <Button
@@ -395,15 +414,17 @@ const ProductDetailPage: React.FC = () => {
                   onClick={handleAddToCart}
                   icon={<ShoppingCart size={16} />}
                   className="py-3 text-sm"
+                  disabled={!isAuthenticated}
                 >
-                  Add to Cart
+                  {isAuthenticated ? 'Add to Cart' : 'Login to Add'}
                 </Button>
                 <Button
                   variant="primary"
                   onClick={handleBuyNow}
                   className="py-3 text-sm"
+                  disabled={!isAuthenticated}
                 >
-                  Buy Now
+                  {isAuthenticated ? 'Buy Now' : 'Login to Buy'}
                 </Button>
               </div>
             </div>

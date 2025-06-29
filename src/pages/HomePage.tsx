@@ -139,6 +139,19 @@ const HomePage: React.FC = () => {
     return serviceConfig[serviceId] || 'active';
   };
 
+  const handleServiceClick = (path: string, state?: any) => {
+    if (!isAuthenticated) {
+      navigate('/login');
+      return;
+    }
+    
+    if (state) {
+      navigate(path, { state });
+    } else {
+      navigate(path);
+    }
+  };
+
   const services = [
     {
       title: 'Airtime Recharge',
@@ -427,10 +440,18 @@ const HomePage: React.FC = () => {
                   key={index}
                   className="p-6 sm:p-8 hover:shadow-xl transition-all duration-300 cursor-pointer group"
                   onClick={() => {
-                    if (service.comingSoon) {
+                    if (service.id === 'store') {
+                      // Allow viewing store without login
+                      navigate(service.path, { state: service.state });
+                    } else if (service.comingSoon) {
                       navigate('/coming-soon', { state: service.state });
                     } else {
-                      navigate(service.path);
+                      // Require login for other services
+                      if (!isAuthenticated) {
+                        navigate('/login');
+                      } else {
+                        navigate(service.path);
+                      }
                     }
                   }}
                 >
@@ -448,6 +469,11 @@ const HomePage: React.FC = () => {
                   <p className="text-gray-600 dark:text-gray-400 leading-relaxed text-sm sm:text-base">
                     {service.description}
                   </p>
+                  {service.id !== 'store' && !service.comingSoon && !isAuthenticated && (
+                    <div className="mt-3 text-sm text-[#0F9D58] font-medium">
+                      Login required to use this service
+                    </div>
+                  )}
                 </Card>
               ))}
             </div>

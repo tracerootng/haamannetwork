@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Minus, Trash2, ShoppingBag } from 'lucide-react';
+import { ArrowLeft, Plus, Minus, Trash2, ShoppingBag, LogIn } from 'lucide-react';
 import { useCartStore } from '../../store/cartStore';
 import { useAuthStore } from '../../store/authStore';
 import Card from '../../components/ui/Card';
@@ -95,6 +95,18 @@ const CartPage: React.FC = () => {
               ))}
             </div>
 
+            {/* Authentication Notice */}
+            {!isAuthenticated && (
+              <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                <div className="flex items-center">
+                  <LogIn className="text-yellow-600 dark:text-yellow-400 mr-2 flex-shrink-0" size={20} />
+                  <p className="text-sm text-yellow-700 dark:text-yellow-300">
+                    Please <a href="/login" className="font-medium underline">login</a> to proceed with checkout
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Cart Summary */}
             <Card className="p-6">
               <div className="space-y-4">
@@ -117,8 +129,9 @@ const CartPage: React.FC = () => {
                     variant="primary"
                     onClick={handleCheckout}
                     className="flex-1"
+                    disabled={!isAuthenticated || items.length === 0}
                   >
-                    Checkout
+                    {isAuthenticated ? 'Checkout' : 'Login to Checkout'}
                   </Button>
                 </div>
               </div>
