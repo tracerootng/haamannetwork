@@ -46,6 +46,7 @@ const TransactionsManagement: React.FC = () => {
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [showTransactionModal, setShowTransactionModal] = useState(false);
   const [exportLoading, setExportLoading] = useState(false);
+  const [exportScope, setExportScope] = useState<'current' | 'all'>('current');
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -61,11 +62,27 @@ const TransactionsManagement: React.FC = () => {
     fetchTransactions();
   }, [user, navigate, currentPage, statusFilter, typeFilter]);
 
-  const fetchTransactions = async () => {
+  // Debounce search to avoid too many requests
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (searchQuery) {
+        fetchTransactions(true);
+      }
+    }, 500);
+    
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  const fetchTransactions = async (isSearch = false) => {
     try {
       setLoading(true);
       
-      // First get the total count for pagination
+      // If searching, reset to first page
+      if (isSearch) {
+        setCurrentPage(1);
+      }
+      
+      // First get the total count for pagination with filters applied
       let countQuery = supabase
         .from('transactions')
         .select('id', { count: 'exact', head: true });
@@ -79,6 +96,13 @@ const TransactionsManagement: React.FC = () => {
         countQuery = countQuery.eq('type', typeFilter);
       }
       
+      // Apply search to count query if provided
+      if (searchQuery) {
+        countQuery = countQuery.or(
+          `reference.ilike.%${searchQuery}%,details->phone.ilike.%${searchQuery}%,details->network.ilike.%${searchQuery}%`
+        );
+      }
+      
       const { count, error: countError } = await countQuery;
       
       if (countError) throw countError;
@@ -90,7 +114,7 @@ const TransactionsManagement: React.FC = () => {
       const from = (currentPage - 1) * itemsPerPage;
       const to = from + itemsPerPage - 1;
       
-      // Now fetch the actual data with pagination
+      // Now fetch the actual data with pagination and filters
       let query = supabase
         .from('transactions')
         .select(`
@@ -99,9 +123,7 @@ const TransactionsManagement: React.FC = () => {
             name,
             email
           )
-        `)
-        .range(from, to)
-        .order('created_at', { ascending: false });
+        `);
       
       // Apply filters
       if (statusFilter !== 'all') {
@@ -111,6 +133,18 @@ const TransactionsManagement: React.FC = () => {
       if (typeFilter !== 'all') {
         query = query.eq('type', typeFilter);
       }
+      
+      // Apply search if provided
+      if (searchQuery) {
+        query = query.or(
+          `reference.ilike.%${searchQuery}%,details->phone.ilike.%${searchQuery}%,details->network.ilike.%${searchQuery}%`
+        );
+      }
+      
+      // Apply pagination and ordering
+      query = query
+        .range(from, to)
+        .order('created_at', { ascending: false });
       
       const { data, error } = await query;
 
@@ -208,26 +242,6 @@ const TransactionsManagement: React.FC = () => {
     }
   };
 
-  const filteredTransactions = transactions.filter((transaction) => {
-    const matchesSearch = getTransactionLabel(transaction.type, transaction.details)
-      .toLowerCase()
-      .includes(searchQuery.toLowerCase());
-    
-    const matchesType = typeFilter === 'all' || transaction.type === typeFilter;
-    const matchesStatus = statusFilter === 'all' || transaction.status === statusFilter;
-    
-    return matchesSearch && matchesType && matchesStatus;
-  });
-
-  const totalTransactions = totalCount;
-  const successfulTransactions = transactions.filter(t => t.status === 'success').length;
-  const pendingTransactions = transactions.filter(t => t.status === 'pending').length;
-  const totalRevenue = transactions
-    .filter(t => t.status === 'success')
-    .reduce((sum, t) => sum + Number(t.amount), 0);
-
-  const transactionTypes = ['all', ...Array.from(new Set(transactions.map(t => t.type)))];
-
   const statusOptions = [
     { value: 'all', label: 'All Status' },
     { value: 'success', label: 'Success' },
@@ -256,21 +270,73 @@ const TransactionsManagement: React.FC = () => {
       // Add date
       doc.text(`Generated: ${new Date().toLocaleString()}`, 105, 27, { align: 'center' });
       
+      // Get data for export
+      let transactionsToExport = transactions;
+      
+      // If exporting all pages, fetch all transactions matching the filters
+      if (exportScope === 'all') {
+        let query = supabase
+          .from('transactions')
+          .select(`
+            *,
+            profiles!transactions_user_id_fkey (
+              name,
+              email
+            )
+          `);
+        
+        // Apply filters
+        if (statusFilter !== 'all') {
+          query = query.eq('status', statusFilter);
+        }
+        
+        if (typeFilter !== 'all') {
+          query = query.eq('type', typeFilter);
+        }
+        
+        // Apply search if provided
+        if (searchQuery) {
+          query = query.or(
+            `reference.ilike.%${searchQuery}%,details->phone.ilike.%${searchQuery}%,details->network.ilike.%${searchQuery}%`
+          );
+        }
+        
+        // Order by created_at
+        query = query.order('created_at', { ascending: false });
+        
+        const { data, error } = await query;
+        
+        if (error) throw error;
+        
+        transactionsToExport = data?.map(transaction => ({
+          ...transaction,
+          user_name: transaction.profiles?.name,
+          user_email: transaction.profiles?.email,
+        })) || [];
+      }
+      
+      // Calculate summary data
+      const successfulTransactions = transactionsToExport.filter(t => t.status === 'success').length;
+      const pendingTransactions = transactionsToExport.filter(t => t.status === 'pending').length;
+      const totalRevenue = transactionsToExport
+        .filter(t => t.status === 'success')
+        .reduce((sum, t) => sum + Number(t.amount), 0);
+      
       // Add summary
       doc.setFontSize(12);
       doc.setTextColor(0);
       doc.text('Summary:', 14, 35);
       
       doc.setFontSize(10);
-      doc.text(`Total Transactions: ${totalCount}`, 14, 42);
+      doc.text(`Total Transactions: ${transactionsToExport.length}`, 14, 42);
       doc.text(`Total Revenue: ${formatCurrency(totalRevenue)}`, 14, 48);
       doc.text(`Successful: ${successfulTransactions}`, 14, 54);
       doc.text(`Pending: ${pendingTransactions}`, 14, 60);
-      doc.text(`Failed: ${transactions.length - successfulTransactions - pendingTransactions}`, 14, 66);
+      doc.text(`Failed: ${transactionsToExport.length - successfulTransactions - pendingTransactions}`, 14, 66);
       
       // Add table
       const tableColumn = ["Date", "Reference", "Type", "Description", "Amount", "Status"];
-      const tableRows = filteredTransactions.map(transaction => [
+      const tableRows = transactionsToExport.map(transaction => [
         formatDate(transaction.created_at),
         transaction.reference,
         transaction.type.replace('_', ' ').toUpperCase(),
@@ -308,13 +374,58 @@ const TransactionsManagement: React.FC = () => {
   };
 
   // Export to CSV function
-  const handleExportCsv = () => {
+  const handleExportCsv = async () => {
     setExportLoading(true);
     try {
+      // Get data for export
+      let transactionsToExport = transactions;
+      
+      // If exporting all pages, fetch all transactions matching the filters
+      if (exportScope === 'all') {
+        let query = supabase
+          .from('transactions')
+          .select(`
+            *,
+            profiles!transactions_user_id_fkey (
+              name,
+              email
+            )
+          `);
+        
+        // Apply filters
+        if (statusFilter !== 'all') {
+          query = query.eq('status', statusFilter);
+        }
+        
+        if (typeFilter !== 'all') {
+          query = query.eq('type', typeFilter);
+        }
+        
+        // Apply search if provided
+        if (searchQuery) {
+          query = query.or(
+            `reference.ilike.%${searchQuery}%,details->phone.ilike.%${searchQuery}%,details->network.ilike.%${searchQuery}%`
+          );
+        }
+        
+        // Order by created_at
+        query = query.order('created_at', { ascending: false });
+        
+        const { data, error } = await query;
+        
+        if (error) throw error;
+        
+        transactionsToExport = data?.map(transaction => ({
+          ...transaction,
+          user_name: transaction.profiles?.name,
+          user_email: transaction.profiles?.email,
+        })) || [];
+      }
+      
       // Create CSV content
       const headers = ['Date', 'Reference', 'Type', 'Description', 'User', 'Amount', 'Status'];
       
-      const rows = filteredTransactions.map(transaction => [
+      const rows = transactionsToExport.map(transaction => [
         formatDate(transaction.created_at),
         transaction.reference,
         transaction.type.replace('_', ' '),
@@ -415,6 +526,29 @@ const TransactionsManagement: React.FC = () => {
     return pageNumbers;
   };
 
+  // Get transaction types from the database
+  const [transactionTypes, setTransactionTypes] = useState<string[]>(['all']);
+  
+  useEffect(() => {
+    const fetchTransactionTypes = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('transactions')
+          .select('type')
+          .limit(1000);
+        
+        if (error) throw error;
+        
+        const types = ['all', ...Array.from(new Set(data.map(t => t.type)))];
+        setTransactionTypes(types);
+      } catch (error) {
+        console.error('Error fetching transaction types:', error);
+      }
+    };
+    
+    fetchTransactionTypes();
+  }, []);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
@@ -438,14 +572,24 @@ const TransactionsManagement: React.FC = () => {
               </button>
               <div>
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Transactions Management</h1>
-                <p className="text-sm text-gray-500 dark:text-gray-400">{totalTransactions} total transactions</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">{totalCount} total transactions</p>
               </div>
             </div>
             
             <div className="flex space-x-3">
+              <div className="relative">
+                <select
+                  value={exportScope}
+                  onChange={(e) => setExportScope(e.target.value as 'current' | 'all')}
+                  className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0F9D58]"
+                >
+                  <option value="current">Export Current Page</option>
+                  <option value="all">Export All Results</option>
+                </select>
+              </div>
               <button
                 onClick={handleExportPdf}
-                disabled={exportLoading || filteredTransactions.length === 0}
+                disabled={exportLoading || transactions.length === 0}
                 className="flex items-center px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50"
               >
                 <FileText size={16} className="mr-2" />
@@ -453,7 +597,7 @@ const TransactionsManagement: React.FC = () => {
               </button>
               <button
                 onClick={handleExportCsv}
-                disabled={exportLoading || filteredTransactions.length === 0}
+                disabled={exportLoading || transactions.length === 0}
                 className="flex items-center px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50"
               >
                 <Download size={16} className="mr-2" />
@@ -471,7 +615,7 @@ const TransactionsManagement: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Transactions</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{totalTransactions}</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">{totalCount}</p>
               </div>
               <DollarSign className="text-blue-500" size={24} />
             </div>
@@ -481,7 +625,7 @@ const TransactionsManagement: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Successful</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{successfulTransactions}</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">{transactions.filter(t => t.status === 'success').length}</p>
               </div>
               <CheckCircle className="text-green-500" size={24} />
             </div>
@@ -491,7 +635,7 @@ const TransactionsManagement: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Pending</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{pendingTransactions}</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">{transactions.filter(t => t.status === 'pending').length}</p>
               </div>
               <Clock className="text-yellow-500" size={24} />
             </div>
@@ -501,7 +645,13 @@ const TransactionsManagement: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Revenue</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{formatCurrency(totalRevenue)}</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                  {formatCurrency(
+                    transactions
+                      .filter(t => t.status === 'success')
+                      .reduce((sum, t) => sum + Number(t.amount), 0)
+                  )}
+                </p>
               </div>
               <TrendingUp className="text-purple-500" size={24} />
             </div>
@@ -554,7 +704,7 @@ const TransactionsManagement: React.FC = () => {
             
             <div className="flex items-center text-sm text-gray-600 dark:text-gray-400">
               <Filter size={16} className="mr-2" />
-              {filteredTransactions.length} transactions found
+              {transactions.length} transactions found
             </div>
           </div>
         </div>
@@ -568,6 +718,9 @@ const TransactionsManagement: React.FC = () => {
               const typeTransactions = transactions.filter(t => t.type === type && t.status === 'success');
               const typeTotal = typeTransactions.reduce((sum, t) => sum + Number(t.amount), 0);
               const typeCount = typeTransactions.length;
+              const totalRevenue = transactions
+                .filter(t => t.status === 'success')
+                .reduce((sum, t) => sum + Number(t.amount), 0);
               const typePercentage = totalRevenue > 0 ? (typeTotal / totalRevenue) * 100 : 0;
               
               return (
@@ -632,7 +785,7 @@ const TransactionsManagement: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                {filteredTransactions.map((transaction) => (
+                {transactions.map((transaction) => (
                   <tr key={transaction.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
@@ -741,7 +894,7 @@ const TransactionsManagement: React.FC = () => {
           </div>
         )}
 
-        {filteredTransactions.length === 0 && (
+        {transactions.length === 0 && (
           <div className="text-center py-12">
             <DollarSign className="mx-auto h-12 w-12 text-gray-400 mb-4" />
             <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No transactions found</h3>

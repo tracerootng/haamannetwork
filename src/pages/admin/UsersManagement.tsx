@@ -53,6 +53,7 @@ const UsersManagement: React.FC = () => {
   const [showBanModal, setShowBanModal] = useState(false);
   const [isBanning, setIsBanning] = useState(false);
   const [exportLoading, setExportLoading] = useState(false);
+  const [exportScope, setExportScope] = useState<'current' | 'all'>('current');
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -68,14 +69,39 @@ const UsersManagement: React.FC = () => {
     fetchUsers();
   }, [user, navigate, currentPage]);
 
-  const fetchUsers = async () => {
+  // Debounce search to avoid too many requests
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (searchQuery) {
+        fetchUsers(true);
+      }
+    }, 500);
+    
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  const fetchUsers = async (isSearch = false) => {
     try {
       setLoading(true);
       
-      // First get the total count for pagination
-      const { count, error: countError } = await supabase
+      // If searching, reset to first page
+      if (isSearch) {
+        setCurrentPage(1);
+      }
+      
+      // First get the total count for pagination with search applied
+      let countQuery = supabase
         .from('profiles')
         .select('*', { count: 'exact', head: true });
+      
+      // Apply search filter to count query if provided
+      if (searchQuery) {
+        countQuery = countQuery.or(
+          `name.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%,phone.ilike.%${searchQuery}%,referral_code.ilike.%${searchQuery}%`
+        );
+      }
+      
+      const { count, error: countError } = await countQuery;
       
       if (countError) throw countError;
       
@@ -86,12 +112,24 @@ const UsersManagement: React.FC = () => {
       const from = (currentPage - 1) * itemsPerPage;
       const to = from + itemsPerPage - 1;
       
-      // Get users with pagination
-      const { data, error } = await supabase
+      // Get users with pagination and search
+      let query = supabase
         .from('profiles')
-        .select('*')
+        .select('*');
+      
+      // Apply search filter if provided
+      if (searchQuery) {
+        query = query.or(
+          `name.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%,phone.ilike.%${searchQuery}%,referral_code.ilike.%${searchQuery}%`
+        );
+      }
+      
+      // Apply pagination
+      query = query
         .range(from, to)
         .order('created_at', { ascending: false });
+
+      const { data, error } = await query;
 
       if (error) throw error;
       
@@ -258,9 +296,34 @@ const UsersManagement: React.FC = () => {
       const totalWalletBalance = users.reduce((sum, u) => sum + Number(u.wallet_balance), 0);
       doc.text(`Total Wallet Balance: ${formatCurrency(totalWalletBalance)}`, 14, 54);
       
+      // Get data for export
+      let usersToExport = users;
+      
+      // If exporting all pages, fetch all users matching the search
+      if (exportScope === 'all') {
+        let query = supabase
+          .from('profiles')
+          .select('*');
+        
+        // Apply search filter if provided
+        if (searchQuery) {
+          query = query.or(
+            `name.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%,phone.ilike.%${searchQuery}%,referral_code.ilike.%${searchQuery}%`
+          );
+        }
+        
+        // Order by created_at
+        query = query.order('created_at', { ascending: false });
+        
+        const { data, error } = await query;
+        
+        if (error) throw error;
+        usersToExport = data || [];
+      }
+      
       // Add table
       const tableColumn = ["Name", "Email", "Phone", "Wallet Balance", "Referrals", "Joined"];
-      const tableRows = filteredUsers.map(user => [
+      const tableRows = usersToExport.map(user => [
         user.name,
         user.email,
         user.phone || 'N/A',
@@ -298,13 +361,38 @@ const UsersManagement: React.FC = () => {
   };
 
   // Export to CSV function
-  const handleExportCsv = () => {
+  const handleExportCsv = async () => {
     setExportLoading(true);
     try {
+      // Get data for export
+      let usersToExport = users;
+      
+      // If exporting all pages, fetch all users matching the search
+      if (exportScope === 'all') {
+        let query = supabase
+          .from('profiles')
+          .select('*');
+        
+        // Apply search filter if provided
+        if (searchQuery) {
+          query = query.or(
+            `name.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%,phone.ilike.%${searchQuery}%,referral_code.ilike.%${searchQuery}%`
+          );
+        }
+        
+        // Order by created_at
+        query = query.order('created_at', { ascending: false });
+        
+        const { data, error } = await query;
+        
+        if (error) throw error;
+        usersToExport = data || [];
+      }
+      
       // Create CSV content
       const headers = ['Name', 'Email', 'Phone', 'Wallet Balance', 'Referrals', 'Referral Earnings', 'Joined', 'Referred By'];
       
-      const rows = filteredUsers.map(user => [
+      const rows = usersToExport.map(user => [
         user.name,
         user.email,
         user.phone || '',
@@ -406,22 +494,6 @@ const UsersManagement: React.FC = () => {
     return pageNumbers;
   };
 
-  const filteredUsers = users.filter(user => 
-    user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    user.phone?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    user.referral_code?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  const totalUsers = totalCount;
-  const adminUsers = users.filter(u => u.is_admin).length;
-  const totalWalletBalance = users.reduce((sum, u) => sum + Number(u.wallet_balance), 0);
-  const activeUsers = users.filter(u => {
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    return new Date(u.created_at) > thirtyDaysAgo;
-  }).length;
-
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
@@ -445,14 +517,24 @@ const UsersManagement: React.FC = () => {
               </button>
               <div>
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Users Management</h1>
-                <p className="text-sm text-gray-500 dark:text-gray-400">{totalUsers} total users</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">{totalCount} total users</p>
               </div>
             </div>
             
             <div className="flex space-x-3">
+              <div className="relative">
+                <select
+                  value={exportScope}
+                  onChange={(e) => setExportScope(e.target.value as 'current' | 'all')}
+                  className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0F9D58]"
+                >
+                  <option value="current">Export Current Page</option>
+                  <option value="all">Export All Results</option>
+                </select>
+              </div>
               <button
                 onClick={handleExportPdf}
-                disabled={exportLoading || filteredUsers.length === 0}
+                disabled={exportLoading || users.length === 0}
                 className="flex items-center px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50"
               >
                 <FileText size={16} className="mr-2" />
@@ -460,7 +542,7 @@ const UsersManagement: React.FC = () => {
               </button>
               <button
                 onClick={handleExportCsv}
-                disabled={exportLoading || filteredUsers.length === 0}
+                disabled={exportLoading || users.length === 0}
                 className="flex items-center px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50"
               >
                 <Download size={16} className="mr-2" />
@@ -478,7 +560,7 @@ const UsersManagement: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Users</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{totalUsers}</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">{totalCount}</p>
               </div>
               <Users className="text-blue-500" size={24} />
             </div>
@@ -488,7 +570,7 @@ const UsersManagement: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Admin Users</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{adminUsers}</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">{users.filter(u => u.is_admin).length}</p>
               </div>
               <CheckCircle className="text-green-500" size={24} />
             </div>
@@ -498,7 +580,7 @@ const UsersManagement: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Wallet Balance</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{formatCurrency(totalWalletBalance)}</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">{formatCurrency(users.reduce((sum, u) => sum + Number(u.wallet_balance), 0))}</p>
               </div>
               <Wallet className="text-purple-500" size={24} />
             </div>
@@ -508,7 +590,13 @@ const UsersManagement: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600 dark:text-gray-400">New Users (30d)</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{activeUsers}</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                  {users.filter(u => {
+                    const thirtyDaysAgo = new Date();
+                    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+                    return new Date(u.created_at) > thirtyDaysAgo;
+                  }).length}
+                </p>
               </div>
               <TrendingUp className="text-orange-500" size={24} />
             </div>
@@ -530,7 +618,7 @@ const UsersManagement: React.FC = () => {
             </div>
             <div className="flex items-center text-sm text-gray-600 dark:text-gray-400">
               <Filter size={16} className="mr-2" />
-              {filteredUsers.length} users found
+              {totalCount} users found
             </div>
           </div>
         </div>
@@ -568,7 +656,7 @@ const UsersManagement: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                {filteredUsers.map((user) => (
+                {users.map((user) => (
                   <tr key={user.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
@@ -718,7 +806,7 @@ const UsersManagement: React.FC = () => {
           </div>
         )}
 
-        {filteredUsers.length === 0 && (
+        {users.length === 0 && (
           <div className="text-center py-12">
             <Users className="mx-auto h-12 w-12 text-gray-400 mb-4" />
             <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No users found</h3>
