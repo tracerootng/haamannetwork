@@ -35,6 +35,9 @@ const PinInput: React.FC<PinInputProps> = ({
     if (value) {
       const valueArray = value.split('').slice(0, length);
       setValues(valueArray.concat(Array(length - valueArray.length).fill('')));
+    } else {
+      // Reset values when value is empty
+      setValues(Array(length).fill(''));
     }
   }, [value, length]);
 

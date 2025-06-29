@@ -40,8 +40,6 @@ type DataPlan = {
   is_active: boolean;
   is_popular: boolean;
   sort_order: number;
-  created_at: string;
-  updated_at: string;
   discount_percentage: number;
   show_discount_badge: boolean;
 };
@@ -128,7 +126,6 @@ const DataPlansManagement: React.FC = () => {
       const { data, error } = await supabase
         .from('data_plan_categories')
         .select('*')
-        .eq('is_active', true)
         .order('network')
         .order('sort_order');
 
@@ -184,7 +181,7 @@ const DataPlansManagement: React.FC = () => {
       }
 
       if (isNaN(discount_percentage) || discount_percentage < 0 || discount_percentage > 100) {
-        alert('Please enter a valid discount percentage between 0 and 100');
+        alert('Discount percentage must be between 0 and 100');
         return;
       }
 
@@ -294,13 +291,12 @@ const DataPlansManagement: React.FC = () => {
           plan_id: plan.id,
           plan_name: plan.description,
           network: plan.network,
-          discount_percentage: plan.discount_percentage,
         },
       }]);
 
       fetchDataPlans();
     } catch (error) {
-      console.error('Error toggling discount badge visibility:', error);
+      console.error('Error toggling discount badge:', error);
       alert('Error updating discount badge visibility. Please try again.');
     }
   };
@@ -766,20 +762,16 @@ const DataPlansManagement: React.FC = () => {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="flex flex-col">
-                              {plan.discount_percentage > 0 ? (
-                                <>
-                                  <span className="text-sm font-medium text-red-500">
-                                    {plan.discount_percentage}% OFF
-                                  </span>
-                                  <span className="text-xs text-gray-500 dark:text-gray-400">
-                                    {plan.show_discount_badge ? 'Visible' : 'Hidden'}
-                                  </span>
-                                </>
-                              ) : (
-                                <span className="text-sm text-gray-500 dark:text-gray-400">
-                                  No discount
-                                </span>
-                              )}
+                              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                plan.show_discount_badge && plan.discount_percentage > 0
+                                  ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
+                                  : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                              }`}>
+                                {plan.discount_percentage > 0 ? `${plan.discount_percentage}% OFF` : 'No Discount'}
+                              </span>
+                              <span className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                {plan.show_discount_badge ? 'Visible' : 'Hidden'}
+                              </span>
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
@@ -834,8 +826,8 @@ const DataPlansManagement: React.FC = () => {
                               onClick={() => handleToggleDiscountBadge(plan)}
                               className={`${
                                 plan.show_discount_badge 
-                                  ? 'text-purple-600 hover:text-purple-900 dark:text-purple-400 dark:hover:text-purple-300' 
-                                  : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-300'
+                                  ? 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-300' 
+                                  : 'text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300'
                               }`}
                               title={plan.show_discount_badge ? 'Hide Discount Badge' : 'Show Discount Badge'}
                             >
@@ -945,7 +937,6 @@ const DataPlansManagement: React.FC = () => {
                 </p>
               </div>
 
-              {/* Discount Settings */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Discount Percentage (%)
@@ -953,20 +944,14 @@ const DataPlansManagement: React.FC = () => {
                 <input
                   type="number"
                   value={formData.discount_percentage}
-                  onChange={(e) => {
-                    const value = parseInt(e.target.value);
-                    setFormData({
-                      ...formData,
-                      discount_percentage: isNaN(value) ? 0 : Math.max(0, Math.min(100, value))
-                    });
-                  }}
+                  onChange={(e) => setFormData({...formData, discount_percentage: parseInt(e.target.value)})}
                   min="0"
                   max="100"
                   step="1"
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0F9D58]"
                 />
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  Enter a value between 0-100. This is for display purposes only and doesn't affect the actual price.
+                  Enter a percentage between 0-100 (e.g., 20 for 20% off)
                 </p>
               </div>
 
@@ -1002,16 +987,12 @@ const DataPlansManagement: React.FC = () => {
                 </label>
               </div>
 
-              {/* Preview of discount badge */}
-              {formData.discount_percentage > 0 && formData.show_discount_badge && (
-                <div className="bg-gray-50 dark:bg-gray-700 p-3 rounded-lg">
-                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Discount Badge Preview:</p>
-                  <div className="flex items-center">
+              {formData.show_discount_badge && formData.discount_percentage > 0 && (
+                <div className="bg-gray-50 dark:bg-gray-700 p-3 rounded-lg border border-gray-200 dark:border-gray-600">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-700 dark:text-gray-300">Discount Badge Preview:</span>
                     <span className="inline-flex px-2 py-1 text-xs font-bold rounded-full bg-red-500 text-white">
                       -{formData.discount_percentage}% OFF
-                    </span>
-                    <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">
-                      This is how the discount badge will appear to users
                     </span>
                   </div>
                 </div>
