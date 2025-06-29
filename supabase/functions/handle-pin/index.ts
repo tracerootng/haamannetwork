@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
-import * as bcrypt from "npm:bcryptjs@2.4.3";
+import { genSalt, hash, compare } from "npm:bcryptjs@2.4.3";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -61,7 +61,7 @@ serve(async (req) => {
             throw new Error("Current PIN is required to set a new PIN");
           }
 
-          const isPinValid = await bcrypt.compare(currentPin, profile.transaction_pin);
+          const isPinValid = await compare(currentPin, profile.transaction_pin);
           if (!isPinValid) {
             // Increment failed attempts
             const newAttempts = (profile.pin_attempts || 0) + 1;
@@ -87,8 +87,8 @@ serve(async (req) => {
         }
 
         // Hash the new PIN
-        const salt = await bcrypt.genSalt(10);
-        const hashedPin = await bcrypt.hash(pin, salt);
+        const salt = await genSalt(10);
+        const hashedPin = await hash(pin, salt);
 
         // Update the user's profile with the hashed PIN
         const { error: updateError } = await supabase
@@ -127,7 +127,7 @@ serve(async (req) => {
         }
 
         // Verify the PIN
-        const isPinValid = await bcrypt.compare(pin, profile.transaction_pin);
+        const isPinValid = await compare(pin, profile.transaction_pin);
         
         if (!isPinValid) {
           // Increment failed attempts
