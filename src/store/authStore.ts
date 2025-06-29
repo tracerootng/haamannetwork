@@ -623,11 +623,17 @@ export const useAuthStore = create<AuthState>()(
             throw new Error('Supabase URL not configured');
           }
 
+          // Get the current session for authentication
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session) {
+            throw new Error('User not authenticated');
+          }
+
           const response = await fetch(`${supabaseUrl}/functions/v1/create-virtual-account`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+              'Authorization': `Bearer ${session.access_token}`,
             },
             body: JSON.stringify({
               userId,
@@ -796,11 +802,17 @@ export const useAuthStore = create<AuthState>()(
             throw new Error('Supabase URL not configured');
           }
 
+          // Get the current session for authentication
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session) {
+            throw new Error('User not authenticated');
+          }
+
           const response = await fetch(`${supabaseUrl}/functions/v1/handle-pin`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+              'Authorization': `Bearer ${session.access_token}`,
             },
             body: JSON.stringify({
               action: 'set_pin',
@@ -839,11 +851,17 @@ export const useAuthStore = create<AuthState>()(
             throw new Error('Supabase URL not configured');
           }
 
+          // Get the current session for authentication
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session) {
+            throw new Error('User not authenticated');
+          }
+
           const response = await fetch(`${supabaseUrl}/functions/v1/handle-pin`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+              'Authorization': `Bearer ${session.access_token}`,
             },
             body: JSON.stringify({
               action: 'verify_pin',
@@ -870,11 +888,17 @@ export const useAuthStore = create<AuthState>()(
             throw new Error('Supabase URL not configured');
           }
 
+          // Get the current session for authentication
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session) {
+            throw new Error('User not authenticated');
+          }
+
           const response = await fetch(`${supabaseUrl}/functions/v1/handle-pin`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+              'Authorization': `Bearer ${session.access_token}`,
             },
             body: JSON.stringify({
               action: 'check_pin_status',
@@ -917,11 +941,17 @@ export const useAuthStore = create<AuthState>()(
             throw new Error('Supabase URL not configured');
           }
 
+          // Get the current session for authentication
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session) {
+            throw new Error('User not authenticated');
+          }
+
           const response = await fetch(`${supabaseUrl}/functions/v1/handle-pin`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+              'Authorization': `Bearer ${session.access_token}`,
             },
             body: JSON.stringify({
               action: 'reset_pin',
