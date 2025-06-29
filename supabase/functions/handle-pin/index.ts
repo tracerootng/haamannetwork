@@ -1,235 +1,301 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "npm:@supabase/supabase-js@2";
-import { genSalt, hash, compare } from "npm:bcryptjs@2.4.3";
+import { createClient } from 'npm:@supabase/supabase-js@2';
+import { createHash } from 'node:crypto';
 
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
-serve(async (req) => {
+interface RequestBody {
+  action: 'set_pin' | 'verify_pin' | 'check_pin_status' | 'reset_pin';
+  userId: string;
+  pin?: string;
+  currentPin?: string;
+}
+
+Deno.serve(async (req: Request) => {
   // Handle CORS preflight requests
-  if (req.method === "OPTIONS") {
-    return new Response(null, {
-      status: 204,
-      headers: corsHeaders,
-    });
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    // Initialize Supabase client with service role key for admin access
-    const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    // Initialize Supabase client with service role key for admin operations
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false
+        }
+      }
+    );
 
     // Parse request body
-    const { action, userId, pin, currentPin } = await req.json();
+    const body: RequestBody = await req.json();
+    const { action, userId, pin, currentPin } = body;
 
-    // Validate required fields
-    if (!action || !userId) {
-      throw new Error("Missing required parameters");
+    if (!userId) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'User ID is required' }),
+        { 
+          status: 400, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
     }
 
-    // Get user profile
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("transaction_pin, pin_attempts, pin_locked_until")
-      .eq("id", userId)
-      .single();
+    // Hash PIN function
+    const hashPin = (pinValue: string): string => {
+      return createHash('sha256').update(pinValue).digest('hex');
+    };
 
-    if (profileError) {
-      throw new Error(`Failed to fetch user profile: ${profileError.message}`);
-    }
-
-    // Check if PIN is locked
-    if (profile.pin_locked_until && new Date(profile.pin_locked_until) > new Date()) {
-      const timeLeft = Math.ceil((new Date(profile.pin_locked_until).getTime() - new Date().getTime()) / 60000);
-      throw new Error(`PIN is locked due to too many failed attempts. Try again in ${timeLeft} minutes.`);
-    }
-
-    // Handle different actions
     switch (action) {
-      case "set_pin": {
+      case 'set_pin': {
         if (!pin || pin.length !== 4 || !/^\d{4}$/.test(pin)) {
-          throw new Error("PIN must be exactly 4 digits");
-        }
-
-        // If user already has a PIN, verify the current PIN
-        if (profile.transaction_pin) {
-          if (!currentPin) {
-            throw new Error("Current PIN is required to set a new PIN");
-          }
-
-          const isPinValid = await compare(currentPin, profile.transaction_pin);
-          if (!isPinValid) {
-            // Increment failed attempts
-            const newAttempts = (profile.pin_attempts || 0) + 1;
-            
-            // If too many failed attempts, lock the PIN
-            let lockedUntil = null;
-            if (newAttempts >= 5) {
-              // Lock for 30 minutes
-              lockedUntil = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+          return new Response(
+            JSON.stringify({ success: false, error: 'PIN must be exactly 4 digits' }),
+            { 
+              status: 400, 
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
             }
-            
-            // Update attempts counter
-            await supabase
-              .from("profiles")
-              .update({ 
-                pin_attempts: newAttempts,
-                pin_locked_until: lockedUntil
-              })
-              .eq("id", userId);
-              
-            throw new Error("Current PIN is incorrect");
+          );
+        }
+
+        // Check if user already has a PIN and currentPin is required
+        const { data: existingProfile } = await supabaseClient
+          .from('profiles')
+          .select('transaction_pin')
+          .eq('id', userId)
+          .single();
+
+        if (existingProfile?.transaction_pin && !currentPin) {
+          return new Response(
+            JSON.stringify({ success: false, error: 'Current PIN is required to change PIN' }),
+            { 
+              status: 400, 
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+            }
+          );
+        }
+
+        // If changing PIN, verify current PIN first
+        if (existingProfile?.transaction_pin && currentPin) {
+          const hashedCurrentPin = hashPin(currentPin);
+          if (existingProfile.transaction_pin !== hashedCurrentPin) {
+            return new Response(
+              JSON.stringify({ success: false, error: 'Current PIN is incorrect' }),
+              { 
+                status: 400, 
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+              }
+            );
           }
         }
 
-        // Hash the new PIN
-        const salt = await genSalt(10);
-        const hashedPin = await hash(pin, salt);
-
-        // Update the user's profile with the hashed PIN
-        const { error: updateError } = await supabase
-          .from("profiles")
+        // Hash and store the new PIN
+        const hashedPin = hashPin(pin);
+        const { error } = await supabaseClient
+          .from('profiles')
           .update({ 
             transaction_pin: hashedPin,
             pin_attempts: 0,
             pin_locked_until: null
           })
-          .eq("id", userId);
+          .eq('id', userId);
 
-        if (updateError) {
-          throw new Error(`Failed to update PIN: ${updateError.message}`);
+        if (error) {
+          console.error('Error setting PIN:', error);
+          return new Response(
+            JSON.stringify({ success: false, error: 'Failed to set PIN' }),
+            { 
+              status: 500, 
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+            }
+          );
         }
 
         return new Response(
-          JSON.stringify({
-            success: true,
-            message: "PIN set successfully",
-          }),
-          {
-            status: 200,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          JSON.stringify({ success: true, message: 'PIN set successfully' }),
+          { 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
           }
         );
       }
 
-      case "verify_pin": {
-        if (!pin) {
-          throw new Error("PIN is required");
+      case 'verify_pin': {
+        if (!pin || pin.length !== 4 || !/^\d{4}$/.test(pin)) {
+          return new Response(
+            JSON.stringify({ success: false, error: 'Invalid PIN format' }),
+            { 
+              status: 400, 
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+            }
+          );
         }
 
-        // Check if user has a PIN set
-        if (!profile.transaction_pin) {
-          throw new Error("No PIN set. Please set a PIN first.");
+        // Get user's PIN and attempt info
+        const { data: profile } = await supabaseClient
+          .from('profiles')
+          .select('transaction_pin, pin_attempts, pin_locked_until')
+          .eq('id', userId)
+          .single();
+
+        if (!profile?.transaction_pin) {
+          return new Response(
+            JSON.stringify({ success: false, error: 'No PIN set for this user' }),
+            { 
+              status: 400, 
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+            }
+          );
         }
 
-        // Verify the PIN
-        const isPinValid = await compare(pin, profile.transaction_pin);
-        
-        if (!isPinValid) {
+        // Check if PIN is locked
+        if (profile.pin_locked_until && new Date(profile.pin_locked_until) > new Date()) {
+          return new Response(
+            JSON.stringify({ 
+              success: false, 
+              error: 'PIN is temporarily locked due to too many failed attempts',
+              isLocked: true,
+              lockedUntil: profile.pin_locked_until
+            }),
+            { 
+              status: 400, 
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+            }
+          );
+        }
+
+        // Verify PIN
+        const hashedPin = hashPin(pin);
+        const isCorrect = profile.transaction_pin === hashedPin;
+
+        if (isCorrect) {
+          // Reset attempts on successful verification
+          await supabaseClient
+            .from('profiles')
+            .update({ 
+              pin_attempts: 0,
+              pin_locked_until: null
+            })
+            .eq('id', userId);
+
+          return new Response(
+            JSON.stringify({ success: true, message: 'PIN verified successfully' }),
+            { 
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+            }
+          );
+        } else {
           // Increment failed attempts
           const newAttempts = (profile.pin_attempts || 0) + 1;
+          const maxAttempts = 3;
           
-          // If too many failed attempts, lock the PIN
-          let lockedUntil = null;
-          if (newAttempts >= 5) {
-            // Lock for 30 minutes
-            lockedUntil = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+          let updateData: any = { pin_attempts: newAttempts };
+          
+          // Lock PIN if max attempts reached
+          if (newAttempts >= maxAttempts) {
+            const lockUntil = new Date();
+            lockUntil.setMinutes(lockUntil.getMinutes() + 15); // Lock for 15 minutes
+            updateData.pin_locked_until = lockUntil.toISOString();
           }
-          
-          // Update attempts counter
-          await supabase
-            .from("profiles")
-            .update({ 
-              pin_attempts: newAttempts,
-              pin_locked_until: lockedUntil
-            })
-            .eq("id", userId);
-            
-          throw new Error("Incorrect PIN");
+
+          await supabaseClient
+            .from('profiles')
+            .update(updateData)
+            .eq('id', userId);
+
+          return new Response(
+            JSON.stringify({ 
+              success: false, 
+              error: `Incorrect PIN. ${maxAttempts - newAttempts} attempts remaining`,
+              attemptsRemaining: maxAttempts - newAttempts,
+              isLocked: newAttempts >= maxAttempts
+            }),
+            { 
+              status: 400, 
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+            }
+          );
         }
+      }
 
-        // Reset attempts on successful verification
-        await supabase
-          .from("profiles")
-          .update({ 
-            pin_attempts: 0,
-            pin_locked_until: null
-          })
-          .eq("id", userId);
+      case 'check_pin_status': {
+        const { data: profile } = await supabaseClient
+          .from('profiles')
+          .select('transaction_pin, pin_attempts, pin_locked_until')
+          .eq('id', userId)
+          .single();
+
+        const hasPin = !!profile?.transaction_pin;
+        const isLocked = profile?.pin_locked_until && new Date(profile.pin_locked_until) > new Date();
 
         return new Response(
-          JSON.stringify({
-            success: true,
-            message: "PIN verified successfully",
+          JSON.stringify({ 
+            success: true, 
+            hasPin,
+            isLocked: !!isLocked,
+            lockedUntil: isLocked ? profile.pin_locked_until : null,
+            attempts: profile?.pin_attempts || 0
           }),
-          {
-            status: 200,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          { 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
           }
         );
       }
 
-      case "check_pin_status": {
-        return new Response(
-          JSON.stringify({
-            success: true,
-            hasPin: !!profile.transaction_pin,
-            isLocked: profile.pin_locked_until && new Date(profile.pin_locked_until) > new Date(),
-            lockedUntil: profile.pin_locked_until,
-          }),
-          {
-            status: 200,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
-        );
-      }
-
-      case "reset_pin": {
-        // This would typically involve some form of verification like email or phone
-        // For now, we'll just clear the PIN (in a real app, you'd want additional security)
-        const { error: updateError } = await supabase
-          .from("profiles")
+      case 'reset_pin': {
+        const { error } = await supabaseClient
+          .from('profiles')
           .update({ 
             transaction_pin: null,
             pin_attempts: 0,
             pin_locked_until: null
           })
-          .eq("id", userId);
+          .eq('id', userId);
 
-        if (updateError) {
-          throw new Error(`Failed to reset PIN: ${updateError.message}`);
+        if (error) {
+          console.error('Error resetting PIN:', error);
+          return new Response(
+            JSON.stringify({ success: false, error: 'Failed to reset PIN' }),
+            { 
+              status: 500, 
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+            }
+          );
         }
 
         return new Response(
-          JSON.stringify({
-            success: true,
-            message: "PIN reset successfully",
-          }),
-          {
-            status: 200,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          JSON.stringify({ success: true, message: 'PIN reset successfully' }),
+          { 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
           }
         );
       }
 
       default:
-        throw new Error("Invalid action");
+        return new Response(
+          JSON.stringify({ success: false, error: 'Invalid action' }),
+          { 
+            status: 400, 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          }
+        );
     }
   } catch (error) {
-    console.error("Error handling PIN operation:", error);
-    
+    console.error('Error in handle-pin function:', error);
     return new Response(
-      JSON.stringify({
-        success: false,
-        error: error.message || "Failed to process PIN operation",
+      JSON.stringify({ 
+        success: false, 
+        error: 'Internal server error',
+        details: error instanceof Error ? error.message : 'Unknown error'
       }),
-      {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      { 
+        status: 500, 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
       }
     );
   }
