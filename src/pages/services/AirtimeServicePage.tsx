@@ -25,25 +25,25 @@ const networkProviders = [
     value: 'mtn', 
     label: 'MTN',
     color: 'bg-yellow-500',
-    imageUrl: 'https://i.ibb.co/350xQ0H/mtn.png'
+    imageUrl: 'https://i.ibb.co/350xQ0HH/mtn.png'
   },
   { 
     value: 'airtel', 
     label: 'Airtel',
     color: 'bg-red-500',
-    imageUrl: 'https://i.ibb.co/LzNyT4v/airtel.png'
+    imageUrl: 'https://i.ibb.co/LzNyT4v4/airtel.png'
   },
   { 
     value: 'glo', 
     label: 'Glo',
     color: 'bg-green-500',
-    imageUrl: 'https://i.ibb.co/NnZLfCH/glo.jpg'
+    imageUrl: 'https://i.ibb.co/NnZLfCHC/glo.jpg'
   },
   { 
     value: '9mobile', 
     label: '9mobile',
     color: 'bg-teal-500',
-    imageUrl: 'https://i.ibb.co/zW7Wvvn/9-mobile.webp'
+    imageUrl: 'https://i.ibb.co/zW7WwvnL/9-mobile.webp'
   },
 ];
 
