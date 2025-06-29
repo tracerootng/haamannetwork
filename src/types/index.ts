@@ -82,6 +82,8 @@ export type DataPlan = {
   description: string;
   amount: number;
   validity: string;
+  discount_percentage?: number;
+  show_discount_badge?: boolean;
 };
 
 export type WaecCard = {

@@ -63,6 +63,8 @@ type DataPlan = {
   is_active: boolean;
   is_popular: boolean;
   sort_order: number;
+  discount_percentage: number;
+  show_discount_badge: boolean;
 };
 
 type DataPlanCategory = {
@@ -698,7 +700,14 @@ const DataServicePage: React.FC = () => {
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="font-bold text-[#0F9D58]">{formatCurrency(plan.selling_price)}</p>
+                    <div className="flex flex-col items-end">
+                      {plan.show_discount_badge && plan.discount_percentage > 0 && (
+                        <span className="inline-flex px-2 py-1 text-xs font-bold rounded-full bg-red-500 text-white mb-1">
+                          -{plan.discount_percentage}% OFF
+                        </span>
+                      )}
+                      <p className="font-bold text-[#0F9D58]">{formatCurrency(plan.selling_price)}</p>
+                    </div>
                     <div className="flex items-center mt-1">
                       <Star size={12} className="text-yellow-400 fill-current" />
                       <span className="text-xs text-gray-500 dark:text-gray-400 ml-1">Popular</span>
@@ -740,6 +749,11 @@ const DataServicePage: React.FC = () => {
                         <p className="font-medium text-gray-900 dark:text-white">{plan.size}</p>
                         {plan.is_popular && (
                           <Badge className="ml-2 bg-yellow-100 text-yellow-800 text-xs">Popular</Badge>
+                        )}
+                        {plan.show_discount_badge && plan.discount_percentage > 0 && (
+                          <Badge className="ml-2 bg-red-500 text-white text-xs font-bold">
+                            -{plan.discount_percentage}% OFF
+                          </Badge>
                         )}
                       </div>
                       <p className="text-xs text-gray-500 dark:text-gray-400">{plan.validity}</p>
@@ -813,7 +827,14 @@ const DataServicePage: React.FC = () => {
                 <p className="text-sm font-medium text-gray-700 dark:text-gray-300">{selectedPlan.description}</p>
                 <p className="text-xs text-gray-500 dark:text-gray-400">{selectedPlan.size} for {selectedPlan.validity}</p>
               </div>
-              <p className="font-bold text-[#0F9D58] text-lg">{formatCurrency(selectedPlan.selling_price)}</p>
+              <div className="flex flex-col items-end">
+                {selectedPlan.show_discount_badge && selectedPlan.discount_percentage > 0 && (
+                  <span className="inline-flex px-2 py-1 text-xs font-bold rounded-full bg-red-500 text-white mb-1">
+                    -{selectedPlan.discount_percentage}% OFF
+                  </span>
+                )}
+                <p className="font-bold text-[#0F9D58] text-lg">{formatCurrency(selectedPlan.selling_price)}</p>
+              </div>
             </div>
           </div>
         )}
@@ -921,9 +942,16 @@ const DataServicePage: React.FC = () => {
             
             <div className="flex justify-between py-3 border-b border-gray-200 dark:border-gray-700">
               <span className="text-gray-600 dark:text-gray-400">Amount</span>
-              <span className="font-medium text-gray-900 dark:text-white">
-                {formatCurrency(selectedPlan?.selling_price || 0)}
-              </span>
+              <div className="flex flex-col items-end">
+                {selectedPlan?.show_discount_badge && selectedPlan?.discount_percentage > 0 && (
+                  <span className="inline-flex px-2 py-1 text-xs font-bold rounded-full bg-red-500 text-white mb-1">
+                    -{selectedPlan.discount_percentage}% OFF
+                  </span>
+                )}
+                <span className="font-medium text-gray-900 dark:text-white">
+                  {formatCurrency(selectedPlan?.selling_price || 0)}
+                </span>
+              </div>
             </div>
             
             <div className="flex justify-between py-3">
@@ -988,9 +1016,16 @@ const DataServicePage: React.FC = () => {
               
               <div className="flex justify-between py-2">
                 <span className="text-gray-600 dark:text-gray-400">Amount</span>
-                <span className="font-medium text-gray-900 dark:text-white">
-                  {formatCurrency(selectedPlan?.selling_price || 0)}
-                </span>
+                <div className="flex flex-col items-end">
+                  {selectedPlan?.show_discount_badge && selectedPlan?.discount_percentage > 0 && (
+                    <span className="inline-flex px-2 py-1 text-xs font-bold rounded-full bg-red-500 text-white mb-1">
+                      -{selectedPlan.discount_percentage}% OFF
+                    </span>
+                  )}
+                  <span className="font-medium text-gray-900 dark:text-white">
+                    {formatCurrency(selectedPlan?.selling_price || 0)}
+                  </span>
+                </div>
               </div>
               
               {saveAsBeneficiary && (

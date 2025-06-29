@@ -40,6 +40,10 @@ type DataPlan = {
   is_active: boolean;
   is_popular: boolean;
   sort_order: number;
+  created_at: string;
+  updated_at: string;
+  discount_percentage: number;
+  show_discount_badge: boolean;
 };
 
 type DataPlanCategory = {
@@ -78,6 +82,8 @@ const DataPlansManagement: React.FC = () => {
     profit_margin: '',
     is_active: true,
     is_popular: false,
+    discount_percentage: 0,
+    show_discount_badge: false,
   });
 
   const [categoryFormData, setcategoryFormData] = useState({
@@ -122,6 +128,7 @@ const DataPlansManagement: React.FC = () => {
       const { data, error } = await supabase
         .from('data_plan_categories')
         .select('*')
+        .eq('is_active', true)
         .order('network')
         .order('sort_order');
 
@@ -156,6 +163,8 @@ const DataPlansManagement: React.FC = () => {
       profit_margin: plan.profit_margin.toString(),
       is_active: plan.is_active,
       is_popular: plan.is_popular,
+      discount_percentage: plan.discount_percentage || 0,
+      show_discount_badge: plan.show_discount_badge || false,
     });
     setShowEditModal(true);
   };
@@ -166,10 +175,16 @@ const DataPlansManagement: React.FC = () => {
     try {
       const profit_margin = parseFloat(formData.profit_margin);
       const selling_price = parseFloat(formData.selling_price);
+      const discount_percentage = parseInt(formData.discount_percentage.toString());
       
       // Validate inputs
       if (isNaN(profit_margin) || isNaN(selling_price) || selling_price <= 0) {
         alert('Please enter valid numbers for selling price and profit margin');
+        return;
+      }
+
+      if (isNaN(discount_percentage) || discount_percentage < 0 || discount_percentage > 100) {
+        alert('Please enter a valid discount percentage between 0 and 100');
         return;
       }
 
@@ -181,6 +196,8 @@ const DataPlansManagement: React.FC = () => {
           profit_margin: profit_margin,
           is_active: formData.is_active,
           is_popular: formData.is_popular,
+          discount_percentage: discount_percentage,
+          show_discount_badge: formData.show_discount_badge,
         })
         .eq('id', editingPlan.id);
 
@@ -257,6 +274,34 @@ const DataPlansManagement: React.FC = () => {
     } catch (error) {
       console.error('Error toggling popular status:', error);
       alert('Error updating popular status. Please try again.');
+    }
+  };
+
+  const handleToggleDiscountBadge = async (plan: DataPlan) => {
+    try {
+      const { error } = await supabase
+        .from('data_plans')
+        .update({ show_discount_badge: !plan.show_discount_badge })
+        .eq('id', plan.id);
+
+      if (error) throw error;
+
+      // Log admin action
+      await supabase.from('admin_logs').insert([{
+        admin_id: user?.id,
+        action: plan.show_discount_badge ? 'hide_discount_badge' : 'show_discount_badge',
+        details: { 
+          plan_id: plan.id,
+          plan_name: plan.description,
+          network: plan.network,
+          discount_percentage: plan.discount_percentage,
+        },
+      }]);
+
+      fetchDataPlans();
+    } catch (error) {
+      console.error('Error toggling discount badge visibility:', error);
+      alert('Error updating discount badge visibility. Please try again.');
     }
   };
 
@@ -681,6 +726,9 @@ const DataPlansManagement: React.FC = () => {
                           Profit
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                          Discount
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                           Status
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
@@ -714,6 +762,24 @@ const DataPlansManagement: React.FC = () => {
                               <span className="text-xs text-gray-500 dark:text-gray-400">
                                 ({plan.profit_margin}%)
                               </span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex flex-col">
+                              {plan.discount_percentage > 0 ? (
+                                <>
+                                  <span className="text-sm font-medium text-red-500">
+                                    {plan.discount_percentage}% OFF
+                                  </span>
+                                  <span className="text-xs text-gray-500 dark:text-gray-400">
+                                    {plan.show_discount_badge ? 'Visible' : 'Hidden'}
+                                  </span>
+                                </>
+                              ) : (
+                                <span className="text-sm text-gray-500 dark:text-gray-400">
+                                  No discount
+                                </span>
+                              )}
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
@@ -763,6 +829,17 @@ const DataPlansManagement: React.FC = () => {
                               title={plan.is_popular ? 'Remove from Popular' : 'Mark as Popular'}
                             >
                               <Star size={16} />
+                            </button>
+                            <button
+                              onClick={() => handleToggleDiscountBadge(plan)}
+                              className={`${
+                                plan.show_discount_badge 
+                                  ? 'text-purple-600 hover:text-purple-900 dark:text-purple-400 dark:hover:text-purple-300' 
+                                  : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-300'
+                              }`}
+                              title={plan.show_discount_badge ? 'Hide Discount Badge' : 'Show Discount Badge'}
+                            >
+                              {plan.show_discount_badge ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}
                             </button>
                           </td>
                         </tr>
@@ -868,7 +945,32 @@ const DataPlansManagement: React.FC = () => {
                 </p>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              {/* Discount Settings */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Discount Percentage (%)
+                </label>
+                <input
+                  type="number"
+                  value={formData.discount_percentage}
+                  onChange={(e) => {
+                    const value = parseInt(e.target.value);
+                    setFormData({
+                      ...formData,
+                      discount_percentage: isNaN(value) ? 0 : Math.max(0, Math.min(100, value))
+                    });
+                  }}
+                  min="0"
+                  max="100"
+                  step="1"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0F9D58]"
+                />
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Enter a value between 0-100. This is for display purposes only and doesn't affect the actual price.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-3 gap-4">
                 <label className="flex items-center">
                   <input
                     type="checkbox"
@@ -888,7 +990,32 @@ const DataPlansManagement: React.FC = () => {
                   />
                   <span className="text-sm text-gray-700 dark:text-gray-300">Popular</span>
                 </label>
+
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={formData.show_discount_badge}
+                    onChange={(e) => setFormData({...formData, show_discount_badge: e.target.checked})}
+                    className="mr-2"
+                  />
+                  <span className="text-sm text-gray-700 dark:text-gray-300">Show Discount</span>
+                </label>
               </div>
+
+              {/* Preview of discount badge */}
+              {formData.discount_percentage > 0 && formData.show_discount_badge && (
+                <div className="bg-gray-50 dark:bg-gray-700 p-3 rounded-lg">
+                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Discount Badge Preview:</p>
+                  <div className="flex items-center">
+                    <span className="inline-flex px-2 py-1 text-xs font-bold rounded-full bg-red-500 text-white">
+                      -{formData.discount_percentage}% OFF
+                    </span>
+                    <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">
+                      This is how the discount badge will appear to users
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="p-6 border-t border-gray-200 dark:border-gray-700">
